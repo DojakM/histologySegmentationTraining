@@ -1,0 +1,54 @@
+import abc
+from argparse import ArgumentParser
+from typing import Any, Optional
+
+import pytorch_lightning as pl
+import torch
+from pytorch_toolbelt.losses import FocalLoss
+from torch_optimizer import AdaBelief
+
+
+class Unet_super(pl.LightningModule):
+    def __init__(self):
+        super(Unet_super, self.__init__()).__init__()
+
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = ArgumentParser
+        ### Arguments
+
+    def forward(self, x):
+        pass
+
+    def loss(self):
+        return None
+
+    def training_step(self):
+        return None
+
+    def training_epoch_end(self, training_step_outputs):
+        return None
+
+    def validation_step(self):
+        return None
+
+    def validation_epoch_end(self, validation_step_outputs):
+        return None
+
+    def test_step(self):
+        return None
+
+    def test_epoch_end(self, test_step_output):
+        return None
+
+    def prepare_data(self):
+        return None
+
+    def predict(self):
+        return None
+
+    def configure_optimizers(self):
+        return None
+
+    def log_tb_images(self):
+        return None

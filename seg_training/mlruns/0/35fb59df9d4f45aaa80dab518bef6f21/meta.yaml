@@ -1,0 +1,15 @@
+artifact_uri: file:///Users/dominikmolitor/Documents/mathesis/seg_training/seg_training/mlruns/0/35fb59df9d4f45aaa80dab518bef6f21/artifacts
+end_time: 1668269217830
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 35fb59df9d4f45aaa80dab518bef6f21
+run_name: overjoyed-slug-911
+run_uuid: 35fb59df9d4f45aaa80dab518bef6f21
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1668268620569
+status: 4
+tags: []
+user_id: dominikmolitor
