@@ -1,11 +1,7 @@
 import abc
 from argparse import ArgumentParser
-from typing import Any, Optional
 
 import pytorch_lightning as pl
-import torch
-from pytorch_toolbelt.losses import FocalLoss
-from torch_optimizer import AdaBelief
 
 
 class Unet_super(pl.LightningModule):
@@ -16,7 +12,9 @@ class Unet_super(pl.LightningModule):
     def add_model_specific_args(parent_parser):
         parser = ArgumentParser
         ### Arguments
+        return parser
 
+    @abc.abstractmethod
     def forward(self, x):
         pass
 
