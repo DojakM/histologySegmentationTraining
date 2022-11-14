@@ -4,9 +4,9 @@ from argparse import ArgumentParser
 import pytorch_lightning as pl
 
 
-class Unet_super(pl.LightningModule):
+class UnetSuper(pl.LightningModule):
     def __init__(self):
-        super(Unet_super, self.__init__()).__init__()
+        super(UnetSuper, self.__init__()).__init__()
 
     @staticmethod
     def add_model_specific_args(parent_parser):

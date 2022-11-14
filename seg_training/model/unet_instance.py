@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from unet_super import Unet_super
+from unet_super import UnetSuper
 
 def create_unet():
     return Unet()
