@@ -1,4 +1,6 @@
 from torch.nn import *
+import torch
+import math
 def init_weights(net, init_type='normal'):
     if init_type == 'kaiming':
         net.apply(weights_init_kaiming)
@@ -38,19 +40,37 @@ class unetConv2(Module):
     def forward(self):
         return self
 
-class unetUp(Module): # Connection upwards layers
-    def __init__(self):
-        return None
+class unetUp(Module): # Upwards of the Unet
+    def __init__(self, in_size, out_size, is_deconv, n_concat=2):
+        super(unetUp, self).__init__()
+        self.conv = unetConv2(in_size + (n_concat - 2) * out_size, out_size, False)
+        if is_deconv:
+            self.up = ConvTranspose2d(in_size, out_size, kernel_size=2, stride=2, padding=0)
+        else:
+            self.up = Sequential(UpsamplingNearest2d(scale_factor=2), Conv2d(in_size, out_size, 1))
 
-    def forward(self):
-        return None
+        # initialise the blocks
+        for child in self.children():
+            if child.__class__.__name__.find('unetConv2') != -1:    # What does this do?
+                continue
+            init_weights(child, init_type='kaiming')
 
-def _upsample_like(): # Why not public?
-    return None
+    def forward(self, high_feature, *low_feature):
+        outputs0 = self.up(high_feature)
+        for feature in low_feature:
+            outputs0 = torch.cat([outputs0, feature], 1)
+        return self.conv(outputs0)
 
-def _size_map(): # Why not public?
-    return None
+def _upsample_like(x, size):   # Why not public?
+    return Upsample(size, mode="Nearest")(x) # What happens hear exactly? Why nearest?
 
+def _size_map(x, height):    # Why not public?
+    size = list(x.shape[-2:])   # What is this
+    sizes = {}
+    for h in range(1, height):
+        sizes[h] = size
+        size = [math.ceil(w / 2) for w in size]
+    return sizes
 def set_dropout():
     return None
 

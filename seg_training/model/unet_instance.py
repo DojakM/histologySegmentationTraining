@@ -6,10 +6,9 @@ from unet_super import UnetSuper
 def create_unet():
     return Unet()
 
-class Unet(Unet_super):
+class Unet(UnetSuper):
     def __init__(self):
         super().__init__()
-        # Instead of writing it here make u conv in utils class!
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
