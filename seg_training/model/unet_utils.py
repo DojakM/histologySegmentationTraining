@@ -64,7 +64,7 @@ class unetUp(Module): # Upwards of the Unet
 def _upsample_like(x, size):   # Why not public?
     return Upsample(size, mode="Nearest")(x) # What happens hear exactly? Why nearest?
 
-def _size_map(x, height):    # Why not public?
+def _size_map(x, height):
     size = list(x.shape[-2:])   # What is this
     sizes = {}
     for h in range(1, height):

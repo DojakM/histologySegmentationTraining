@@ -7,11 +7,11 @@ import torch.optim as optim
 import time
 import tempfile
 
-from tensorboardX import SummaryWriter
+#from tensorboardX import SummaryWriter     # conflict protobuf
 from rich import traceback
 
 from mlf_core.mlf_core import log_sys_intel_conda_env, set_general_random_seeds
-from model.unet_instance import create_model, create_parallel_model
+#from model.unet_instance import create_model, create_parallel_model
 from training.train import train, test
 from data_loading.data_loader import load_train_test_data
 
@@ -41,30 +41,30 @@ def start_training(cuda, epochs, general_seed, pytorch_seed, log_interval,
     train_loader, test_loader = load_train_test_data(training_batch_size, test_batch_size)
 
     # Define model, device and optimizer
-    if torch.cuda.device_count() > 1:
-        model = create_parallel_model()
-    else:
-        model = create_model()
-    model.to(device)
-    optimizer = optim.Adam(model.parameters())
-    optimizer.step()
+    #if torch.cuda.device_count() > 1:
+        #model = create_parallel_model()
+    #else:
+        #model = create_model()
+    #model.to(device)
+    #optimizer = optim.Adam(model.parameters())
+    #optimizer.step()
 
     with mlflow.start_run():
         # Create a SummaryWriter to write TensorBoard events locally
         events_output_dir = tempfile.mkdtemp()
-        writer = SummaryWriter(events_output_dir)
+        #writer = SummaryWriter(events_output_dir)
         click.echo(click.style(f'Writing TensorBoard events locally to {events_output_dir}\n', fg='blue'))
 
         # Start training
         runtime = time.time()
-        for epoch in range(1, epochs + 1):
-            train(use_cuda, model, epoch, optimizer, log_interval, train_loader, writer)
-            test(use_cuda, model, epoch, test_loader, writer)
+        #for epoch in range(1, epochs + 1):
+        #    train(use_cuda, model, epoch, optimizer, log_interval, train_loader, writer)
+        #    test(use_cuda, model, epoch, test_loader, writer)
         device = 'GPU' if use_cuda else 'CPU'
         click.echo(click.style(f'{device} Run Time: {str(time.time() - runtime)} seconds', fg='green'))
 
         # Closing writer to allow for the model to be logged
-        writer.close()
+        #writer.close()
 
         # Log the model to mlflow
         click.echo(click.style('Logging model to mlflow...', fg='blue')) #here something breaks
