@@ -130,3 +130,9 @@ dmypy.json
 
 # Jetbrains IDE
 .idea/
+/seg_training/data/__MACOSX/*
+/seg_training/data/download/*
+/seg_training/data/images/*
+/seg_training/data/Lizard_Labels/*
+/seg_training/data/OME-TIFFs/*
+/seg_training/data/patches/*
