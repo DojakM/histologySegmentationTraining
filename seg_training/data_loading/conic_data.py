@@ -2,7 +2,7 @@ import requests
 import glob
 from zipfile import ZipFile
 import cv2
-import warnings
+import torch
 from seg_training.data_loading.data_getter_utils.utils import *
 from seg_training.data_loading.data_getter_utils.patch_extractor import PatchExtractor
 import pandas as pd
@@ -10,68 +10,68 @@ import scipy.io as sio
 import tqdm
 import tifffile as tiff
 from torch.utils.data import Dataset, dataset
+# A function that applies a transformation to an image.
+from skimage.transform import warp, AffineTransform
+from skimage.transform import rotate
+import random
 
 class ConicData(Dataset):
     classes = ['neutrophil', 'epithelial', 'lymphocyte', 'plasma', 'eosinophil', 'connective']
 
-    @property
-    def train_labels(self):
-        warnings.warn("train_labels has been renamed targets")
-        return self.targets
-
-    @property
-    def validation_labels(self):
-        warnings.warn("validation_labels has been renamed targets")
-        return self.targets
-
-    @property
-    def test_labels(self):
-        warnings.warn("test_labels has been renamed targets")
-        return self.targets
-
-    @property
-    def train_data(self):
-        warnings.warn("train_data has been renamed data")
-        return self.data
-
-    @property
-    def validation_data(self):
-        warnings.warn("validation_data has been renamed data")
-        return self.data
-
-    @property
-    def test_data(self):
-        warnings.warn("test_data has been renamed data")
-        return self.data
-
-    def __init__(self, download: bool = True, from_ome_tiff: bool = False):
+    def __init__(self, ids, download: bool = False, from_ome_tiff: bool = True, apply_trans=True):
         super(ConicData, self).__init__()
+        self.ids = ids
+        self.imgs = []
+        self.labels = []
         self.img_dir = "../data/OME-TIFFs/"
         self.np_dir = "../data/patches/"
-        self.labels = pd.read_csv("../data/patches/patch_info.csv")
-        self.count = pd.read_csv("../data/patches/counts.csv")
-        self.from_ome_tiff = from_ome_tiff
+        self.names = pd.read_csv(self.np_dir + "patch_info.csv")
+        self.count = pd.read_csv(self.np_dir + "counts.csv")
         if download:
             self.full_download()
         if not self._check_exists:
             raise RuntimeError("Dataset not found!")
+        if from_ome_tiff:
+            for idx in self.ids:
+                name = self.names[idx]
+                img_path = os.path.join(self.img_dir, name + ".ome.tiff")
+                img = np.array(img_path)[:, :, 0:4]
+                label = np.array(img_path)[:, :, 4]
+                self.imgs.append(torch.tensor(img))
+                self.labels.append(torch.tensor(label))
+        else:
+            imgs = np.load(self.np_dir + "images.npy")
+            labels = np.load(self.np_dir + "labels.npy")[:, :, :, 1]
+            for pair in zip(imgs, labels):
+                self.imgs.append(torch.tensor(pair[0]))
+                self.labels.append(torch.tensor(pair[1]))
+        self.apply_trans = apply_trans
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.names)
+
+    def apply_transformation(self, img, label):
+        img = np.transpose(img, axes=[1, 2, 0])
+        rot_angle = random.uniform(-1, 1)  # max 2 deg.
+        img = rotate(img, rot_angle, mode='edge')  # angle in deg.
+        label = rotate(label, rot_angle, mode='edge')  # angle in deg.
+        sx = random.uniform(-1, 1)
+        sy = random.uniform(-1, 1)
+        shift_trans = AffineTransform(translation=(sx, sy))
+
+        img = warp(img, shift_trans, mode='edge')
+        label = warp(label, shift_trans, mode='edge')
+        img = np.transpose(img, axes=[2, 0, 1])
+        label = np.clip(np.rint(label), 0, len(self.classes) - 1)
+        return (img, label)
 
     def __getitem__(self, index) -> dataset.T_co:
-        if self.from_ome_tiff:
-            img_path = os.path.join(self.img_dir, self.labels + ".ome.tiff")
-            image = np.array(img_path)[:, :, 0:4]
-            label = np.array(img_path)[:, :, 4]
-            return image, label
-        else:
-            arr_path = os.path.join(self.np_dir, "images.npy")
-            image = np.load(arr_path)[index, :, : 0:4]
-            label = np.load(arr_path)[index, :, :, 4]
-            return image, label
+        pair = [self.imgs[index], self.labels[index]]
+        if self.apply_trans:
+            pair = self.apply_transformation(pair[0], pair[1])
+        return pair[0], pair[1]
 
-    def full_download(self, download = True, unzip = True, create_patch = True, ome_tiff = True):
+    def full_download(self, download = True, unzip = True, create_patch = True, ome_tiff = False):
         """Method for downloading, unzipping, patching and creating segmentation masked ome.tiff
 
             download: Whether files should be downloaded

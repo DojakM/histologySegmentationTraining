@@ -11,10 +11,10 @@ import tempfile
 from rich import traceback
 
 from mlf_core.mlf_core import log_sys_intel_conda_env, set_general_random_seeds
-#from model.unet_instance import create_model, create_parallel_model
-from training.train import train, test
-from data_loading.data_loader import load_train_test_data
+from seg_training.data_loading.data_loader import ConicDataModule
 
+
+#from model.unet_instance import create_model, create_parallel_model
 
 @click.command()
 @click.option('--cuda', type=click.Choice(['True', 'False']), default='True', help='Enable or disable CUDA support.')
@@ -38,7 +38,7 @@ def start_training(cuda, epochs, general_seed, pytorch_seed, log_interval,
     set_pytorch_random_seeds(pytorch_seed, use_cuda=use_cuda)
 
     # Load training and testing data
-    train_loader, test_loader = load_train_test_data(training_batch_size, test_batch_size)
+    dm = ConicDataModule()
 
     # Define model, device and optimizer
     #if torch.cuda.device_count() > 1:
