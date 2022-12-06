@@ -1,24 +1,33 @@
-import requests
 import glob
+import random
+import shutil
 from zipfile import ZipFile
 import cv2
-import torch
-from seg_training.data_loading.data_getter_utils.utils import *
-from seg_training.data_loading.data_getter_utils.patch_extractor import PatchExtractor
+import pathlib
+
 import pandas as pd
+import pytorch_lightning as pt
+import requests
 import scipy.io as sio
-import tqdm
 import tifffile as tiff
-from torch.utils.data import Dataset, dataset
+import torch
+import tqdm
+import numpy as np
+import os
+from seg_training.data_loading.data_getter_utils.patch_extractor import PatchExtractor
+from seg_training.data_loading.data_getter_utils.utils import rm_n_mkdir, recur_find_ext, remap_label, cropping_center
+from skimage.transform import rotate
 # A function that applies a transformation to an image.
 from skimage.transform import warp, AffineTransform
-from skimage.transform import rotate
-import random
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, dataset
+
+
 
 class ConicData(Dataset):
-    classes = ['neutrophil', 'epithelial', 'lymphocyte', 'plasma', 'eosinophil', 'connective']
+    classes = ['background', 'neutrophil', 'epithelial', 'lymphocyte', 'plasma', 'eosinophil', 'connective']
 
-    def __init__(self, ids, download: bool = False, from_ome_tiff: bool = True, apply_trans=True):
+    def __init__(self, ids: list, download: bool = False, from_ome_tiff: bool = True, apply_trans=True):
         super(ConicData, self).__init__()
         self.ids = ids
         self.imgs = []
@@ -33,10 +42,11 @@ class ConicData(Dataset):
             raise RuntimeError("Dataset not found!")
         if from_ome_tiff:
             for idx in self.ids:
-                name = self.names[idx]
-                img_path = os.path.join(self.img_dir, name + ".ome.tiff")
-                img = np.array(img_path)[:, :, 0:4]
-                label = np.array(img_path)[:, :, 4]
+                name = self.names.iloc[idx, 0]
+                img_path = os.path.join(self.img_dir, name + ".ome.tif")
+                img_raw = tiff.imread(img_path)
+                img = np.array(img_raw)[:, :, 0:3]
+                label = np.array(img_raw)[:, :, 3]
                 self.imgs.append(torch.tensor(img))
                 self.labels.append(torch.tensor(label))
         else:
@@ -71,7 +81,7 @@ class ConicData(Dataset):
             pair = self.apply_transformation(pair[0], pair[1])
         return pair[0], pair[1]
 
-    def full_download(self, download = True, unzip = True, create_patch = True, ome_tiff = False):
+    def full_download(self, download=True, unzip=True, create_patch=True, ome_tiff=False):
         """Method for downloading, unzipping, patching and creating segmentation masked ome.tiff
 
             download: Whether files should be downloaded
@@ -240,6 +250,9 @@ class ConicData(Dataset):
         nuclei_counts_df.to_csv(out_dir + "counts.csv", index=False)
         patch_names_df.to_csv(out_dir + "patch_info.csv", index=False)
 
+    def return_classes(self):
+        return self.classes
+
     @staticmethod
     def _numpy_to_ome_tiff():
         data_folder = "../data/patches/"
@@ -258,6 +271,40 @@ class ConicData(Dataset):
             full_image[:, :, 3] = classification[:, :]
 
             full_image = np.transpose(full_image, (2, 0, 1))
-            with tiff.TiffWriter(os.path.join("../data/OME-TIFFs/", info.iloc[ids,0] + ".ome.tif"),
+            with tiff.TiffWriter(os.path.join("../data/OME-TIFFs/", info.iloc[ids, 0] + ".ome.tif"),
                                  bigtiff=True) as tif_file:
                 tif_file.write(full_image, photometric="rgb")
+
+class ConicDataModule(pt.LightningDataModule):
+    def __init__(self, **kwargs):
+        super(ConicDataModule, self).__init__()
+        self.df_train = None
+        self.df_val = None
+        self.df_test = None
+        self.train_data_loader = None
+        self.val_data_loader = None
+        self.test_data_loader = None
+        self.args = kwargs
+        self.train_ids = [0, 1, 2, 3, 4, 5]
+        self.test_ids = [6, 7, 8, 9]
+        self.setup()
+        self.prepare_data()
+
+    def prepare_data(self, *args, **kwargs):
+        pass
+
+    def setup(self, stage=None):
+        self.df_train = ConicData(self.train_ids, download=False)
+        self.df_test = ConicData(self.test_ids, download=False)
+
+    def train_dataloader(self):
+        return DataLoader(self.df_train, batch_size=self.args['training_batch_size'], num_workers=self.args['num_workers'], shuffle=True)
+
+    def test_dataloader(self):
+        return DataLoader(self.df_test, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'], shuffle=False)
+
+    def val_dataloader(self):
+        return DataLoader(self.df_test, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'], shuffle=False)
+
+    def transfer_batch_to_device(self, batch, device):
+        pass

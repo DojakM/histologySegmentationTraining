@@ -1,55 +1,90 @@
-import torch
+import pytorch_lightning as pl
+from argparse import ArgumentParser
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
 import mlflow
-import torch.nn.functional as F
-
-from torch.autograd import Variable
-
-
-def log_scalar(name, value, step, writer):
-    """Log a scalar value to both MLflow and TensorBoard"""
-    writer.add_scalar(name, value, step)
-    mlflow.log_metric(name, value)
+from data_loading.data_loader import LitsDataModule
+from model.model import LitsSegmentator
+from mlf_core import MLFCore
+import os
+from rich import print
 
 
-def train(use_cuda, model, epoch, optimizer, log_interval, train_loader, writer):
-    model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        if use_cuda:
-            data, target = data.cuda(), target.cuda()
-        data, target = Variable(data), Variable(target)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
-        if batch_idx % log_interval == 0:
-            print(f'Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)}'
-                  f'({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f}')
-            step = epoch * len(train_loader) + batch_idx
-            log_scalar('train_loss', loss.data.item(), step, writer)
-            model.log_weights(step, writer)
+if __name__ == "__main__":
+    parser = ArgumentParser(description='U-Net segmentation for LiTS dataset')
+    parser.add_argument(
+        '--general-seed',
+        type=int,
+        default=0,
+        help='General random seed',
+    )
+    parser.add_argument(
+        '--pytorch-seed',
+        type=int,
+        default=0,
+        help='Random seed of all Pytorch functions',
+    )
+    parser.add_argument(
+        '--log-interval',
+        type=int,
+        default=100,
+        help='log interval of stdout',
+    )
 
+    parser = pl.Trainer.add_argparse_args(parent_parser=parser)
+    parser = LitsSegmentator.add_model_specific_args(parent_parser=parser)
 
-def test(use_cuda, model, epoch, test_loader, writer):
-    model.eval()
-    test_loss = 0
-    correct = 0
-    with torch.no_grad():
-        for data, target in test_loader:
-            if use_cuda:
-                data, target = data.cuda(), target.cuda()
-            data, target = Variable(data), Variable(target)
-            output = model(data)
-            # sum up batch loss
-            test_loss += F.nll_loss(output, target,
-                                    reduction='sum').data.item()
-            # get the index of the max log-probability
-            pred = output.data.max(1)[1]
-            correct += pred.eq(target.data).cpu().sum().item()
+    mlflow.autolog(1)
+    # log conda env and system information
+    MLFCore.log_sys_intel_conda_env()
+    # parse cli arguments
+    args = parser.parse_args()
+    dict_args = vars(args)
 
-    test_loss /= len(test_loader.dataset)
-    test_accuracy = 100.0 * correct / len(test_loader.dataset)
-    print(f'\nTest set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(test_loader.dataset)} ({test_accuracy:.0f}%)\n')
-    step = (epoch + 1) * len(test_loader)
-    log_scalar('test_loss', test_loss, step, writer)
-    log_scalar('test_accuracy', test_accuracy, step, writer)
+    # print("->args:") # take a look at those args
+    # print(dict_args)
+
+    # store seed and number of gpus to make linter bit less restrict in terms of naming
+    general_seed = dict_args['general_seed']
+    pytorch_seed = dict_args['pytorch_seed']
+    num_of_gpus = dict_args['gpus']
+
+    # set det.
+    MLFCore.set_general_random_seeds(general_seed)
+    MLFCore.set_pytorch_random_seeds(pytorch_seed, num_of_gpus)
+
+    if 'accelerator' in dict_args:
+        if dict_args['accelerator'] == 'None':
+            dict_args['accelerator'] = None
+        elif dict_args['accelerator'] != 'ddp':
+            print(f'[bold red]{dict_args["accelerator"]}[bold blue] currently not supported. Switching to [bold green]ddp!')
+            dict_args['accelerator'] = 'ddp'
+
+    dm = LitsDataModule(**dict_args)
+
+    dm.prepare_data()
+    dm.setup(stage='fit')
+    model = LitsSegmentator(**dict_args)
+    model.log_every_n_steps = dict_args['log_interval']
+
+    # check, whether the run is inside a Docker container or not
+    if 'MLF_CORE_DOCKER_RUN' in os.environ:
+        checkpoint_callback = ModelCheckpoint(filepath='/mlflow/tmp/mlruns', save_top_k=1, verbose=True, monitor='train_avg_loss', mode='min', prefix='',)
+        trainer = pl.Trainer.from_argparse_args(args, checkpoint_callback=checkpoint_callback, default_root_dir='/data', logger=TensorBoardLogger('/data'))
+        tensorboard_output_path = f'data/default/version_{trainer.logger.version}'
+    else:
+        checkpoint_callback = ModelCheckpoint(filepath=os.getcwd(), save_top_k=1, verbose=True, monitor='train_avg_loss', mode='min', prefix='',)
+        trainer = pl.Trainer.from_argparse_args(args, checkpoint_callback=checkpoint_callback)
+        tensorboard_output_path = f'{os.getcwd()}/lightning_logs/version_{trainer.logger.version}'
+
+    # set det.
+    trainer.deterministic = True
+    trainer.benchmark = False
+
+    trainer.log_every_n_steps = dict_args['log_interval']
+    trainer.check_val_every_n_epoch = dict_args['test_epochs']
+
+    trainer.fit(model, dm)
+    trainer.test()
+
+    print(f'\n[bold blue]For tensorboard log, call [bold green]tensorboard --logdir={tensorboard_output_path}')

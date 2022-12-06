@@ -1,7 +1,8 @@
-import numpy as np
-import pathlib
 import os
+import pathlib
 import shutil
+
+import numpy as np
 
 
 def remap_label(pred, by_size=False):

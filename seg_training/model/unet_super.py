@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 from typing import Any, Optional
 
 import cv2
+import torchmetrics as metrics
 import pytorch_lightning as pl
 import torch
 from torch_optimizer import AdaBelief
@@ -10,11 +11,12 @@ from torch_optimizer import AdaBelief
 __all__ = ['UNetsuper']
 
 
+
 class UNetsuper(pl.LightningModule):
     def __init__(self, num_classes, len_test_set: int, hparams: dict, input_channels=1, min_filter=32, **kwargs):
         super(UNetsuper, self).__init__()
         self.num_classes = num_classes
-        # self.metric = iou_score
+        self.metric = metrics.JaccardIndex(task = "multiclass", num_classes=7)
         self.save_hyperparameters(hparams)
         self.args = kwargs
         self.len_test_set = len_test_set
@@ -174,13 +176,13 @@ class UNetsuper(pl.LightningModule):
         }
         return [self.optimizer], [self.scheduler]
 
-    def log_tb_images(self, batch_idx, x: torch.Tensor, y: torch.Tensor, y_hat: torch.Tensor, index=0):
-        # img = cv2.cvtColor(unnormalize(x[index].cpu().detach().numpy().squeeze()), cv2.COLOR_GRAY2RGB).astype(int)
-        pred = y_hat[index].cpu().detach().numpy()
-        mask = y[index].cpu().detach().numpy()
-        alpha = 0.7
-        # Performing image overlay
-        # gt = label2rgb(alpha, img, mask)
-        # prediction = label2rgb(alpha, img, pred)
-        # log = torch.stack([gt, prediction], dim=0)
-        # self.logger.experiment.add_images(f'Images and Masks Batch: {batch_idx}', log, self.current_epoch)
+    # def log_tb_images(self, batch_idx, x: torch.Tensor, y: torch.Tensor, y_hat: torch.Tensor, index=0):
+    #     img = cv2.cvtColor(unnormalize(x[index].cpu().detach().numpy().squeeze()), cv2.COLOR_GRAY2RGB).astype(int)
+    #     pred = y_hat[index].cpu().detach().numpy()
+    #     mask = y[index].cpu().detach().numpy()
+    #     alpha = 0.7
+    #     # Performing image overlay
+    #     gt = label2rgb(alpha, img, mask)
+    #     prediction = label2rgb(alpha, img, pred)
+    #     log = torch.stack([gt, prediction], dim=0)
+    #     self.logger.experiment.add_images(f'Images and Masks Batch: {batch_idx}', log, self.current_epoch)
