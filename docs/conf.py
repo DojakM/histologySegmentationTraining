@@ -44,7 +44,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'seg_training'
+project = 'seg_training_main'
 copyright = "2022, Dominik Jakob Molitoer"
 author = "Dominik Jakob Molitoer"
 
@@ -126,7 +126,7 @@ latex_elements = {
 # [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'mlf_core_template.tex',
-     'seg_training Documentation',
+     'seg_training_main Documentation',
      'Dominik Jakob Molitoer', 'manual'),
 ]
 
@@ -137,7 +137,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     (master_doc, 'mlf_core_template',
-     'seg_training Documentation',
+     'seg_training_main Documentation',
      [author], 1)
 ]
 
@@ -149,7 +149,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     (master_doc, 'mlf_core_template',
-     'seg_training Documentation',
+     'seg_training_main Documentation',
      author,
      'mlf_core_template',
      'One line description of project.',

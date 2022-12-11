@@ -1,4 +1,4 @@
-name: Train seg_training using CPU
+name: Train seg_training_main using CPU
 
 on: [push, pull_request]
 
@@ -17,14 +17,14 @@ jobs:
         uses: docker/build-push-action@v1
         with:
           dockerfile: Dockerfile
-          repository: ghcr.io/asd/seg_training
+          repository: ghcr.io/asd/seg_training_main
           tags: 0.1.0-SNAPSHOT
           push: false
 
       - name: Setup Python
         uses: actions/setup-python@v1
         with:
-          python-version:  ${{ matrix.python }} 
+          python-version:  ${{ matrix.python }}
 
       - name: Install mlflow
         run: pip install mlflow
