@@ -5,6 +5,7 @@ from zipfile import ZipFile
 import cv2
 import pathlib
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import pytorch_lightning as pt
 import requests
@@ -51,8 +52,8 @@ class ConicData(Dataset):
                 name = self.names.iloc[idx, 0]
                 img_path = os.path.join(self.img_dir, name + ".ome.tif")
                 img_raw = tiff.imread(img_path)
-                img = np.array(img_raw)[:, :, 0:3]
-                label = np.array(img_raw)[:, :, 3]
+                img = np.array(img_raw)[0:3, :, :]
+                label = np.array(img_raw)[3, :, :]
                 self.imgs.append(torch.from_numpy(img).float())
                 self.labels.append(torch.from_numpy(label).float())
         else:
@@ -85,10 +86,9 @@ class ConicData(Dataset):
         img, target = self.imgs[index], self.labels[index].int()
         if self.apply_trans is not None:
             augmented = self.apply_transformation(img.numpy(), target.numpy())
-            img = augmented[0].transpose(2, 0, 1)
+            img = augmented[0]
             target = augmented[1].astype('int64').squeeze()
             img = img.astype('float32')
-
         return img, target
 
     def full_download(self, download=True, unzip=True, create_patch=True, ome_tiff=False):

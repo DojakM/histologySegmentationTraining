@@ -55,14 +55,19 @@ class Unet(UnetSuper):
     def forward(self, inputs):
         conv1 = self.conv1(inputs)  # 16*256*256
         maxpool1 = self.maxpool(conv1)  # 16*128*128
+        print(conv1.size(), maxpool1.size())
 
         conv2 = self.conv2(maxpool1)  # 32*128*128
         maxpool2 = self.maxpool(conv2)  # 32*64*64
+        print(conv2.size(), maxpool2.size())
+
 
         conv3 = self.conv3(maxpool2)  # 64*64*64
         maxpool3 = self.maxpool(conv3)  # 64*32*32
+        print(conv3.size(), maxpool3.size())
 
         center = self.center(maxpool3)  # 256*16*16
+        print(center.size())
         up3 = self.up_concat3(center, conv3)  # 64*64*64
         up2 = self.up_concat2(up3, conv2)  # 32*128*128
         up1 = self.up_concat1(up2, conv1)  # 16*256*256
@@ -70,3 +75,10 @@ class Unet(UnetSuper):
         final = self.final(up1)
 
         return final
+
+    def print(self, *args, **kwargs) -> None:
+        print("level")
+        for i in kwargs:
+            print("\n####\n")
+            print(i)
+            print("\n")
