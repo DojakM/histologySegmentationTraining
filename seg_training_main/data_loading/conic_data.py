@@ -53,8 +53,8 @@ class ConicData(Dataset):
                 img_raw = tiff.imread(img_path)
                 img = np.array(img_raw)[:, :, 0:3]
                 label = np.array(img_raw)[:, :, 3]
-                self.imgs.append(torch.tensor(img))
-                self.labels.append(torch.tensor(label))
+                self.imgs.append(torch.from_numpy(img).float())
+                self.labels.append(torch.from_numpy(label).float())
         else:
             imgs = np.load(self.np_dir + "images.npy")
             labels = np.load(self.np_dir + "labels.npy")[:, :, :, 1]
@@ -82,10 +82,14 @@ class ConicData(Dataset):
         return (img, label)
 
     def __getitem__(self, index):
-        pair = [self.imgs[index], self.labels[index]]
-        if self.apply_trans:
-            pair = self.apply_transformation(pair[0], pair[1])
-        return pair[0], pair[1]
+        img, target = self.imgs[index], self.labels[index].int()
+        if self.apply_trans is not None:
+            augmented = self.apply_transformation(img.numpy(), target.numpy())
+            img = augmented[0].transpose(2, 0, 1)
+            target = augmented[1].astype('int64').squeeze()
+            img = img.astype('float32')
+
+        return img, target
 
     def full_download(self, download=True, unzip=True, create_patch=True, ome_tiff=False):
         """Method for downloading, unzipping, patching and creating segmentation masked ome.tiff
@@ -291,20 +295,20 @@ class ConicDataModule(pt.LightningDataModule):
         self.val_data_loader = None
         self.test_data_loader = None
         self.args = kwargs
-        self.train_ids = [0, 1, 2, 3, 4, 5]
-        self.test_ids = [6, 7, 8, 9]
+        self.train_ids = [0,1,2,3,4,5,6,7,8,9]
+        self.test_ids = [10, 11, 12]
         self.setup()
         self.prepare_data()
-
     def prepare_data(self, *args, **kwargs):
         pass
 
     def setup(self, stage=None):
-        self.df_train = ConicData(self.train_ids, download=False)
-        self.df_test = ConicData(self.test_ids, download=False)
+        self.df_train = ConicData(self.train_ids, download=False, apply_trans=False)
+        self.df_test = ConicData(self.test_ids, download=False, apply_trans=False)
 
     def train_dataloader(self):
-        return DataLoader(self.df_train, batch_size=self.args['training_batch_size'], num_workers=self.args['num_workers'], shuffle=True)
+        return DataLoader(self.df_train, batch_size=self.args['training_batch_size'], num_workers=self.args[
+            'num_workers'], shuffle=True)
 
     def test_dataloader(self):
         return DataLoader(self.df_test, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'], shuffle=False)
@@ -312,5 +316,4 @@ class ConicDataModule(pt.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.df_test, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'], shuffle=False)
 
-    def transfer_batch_to_device(self, batch, device):
-        pass
+

@@ -1,6 +1,6 @@
 import os
 from argparse import ArgumentParser
-# import mlflow
+import mlflow
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -32,7 +32,6 @@ if __name__ == "__main__":
     )
     parser = pl.Trainer.add_argparse_args(parent_parser=parser)
     parser = Unet.add_model_specific_args(parent_parser=parser)
-    # mlflow.pytorch.autolog(log_models=False)
     # log conda env and system information
     # MLFCore.log_sys_intel_conda_env()
     # parse cli arguments
@@ -67,7 +66,8 @@ if __name__ == "__main__":
     dm.setup(stage='fit')
     # Supported batch size:24
     # Supported batch size:96
-    model = Unet(7, input=3, hparams=parser.parse_args(), len_test_set=dm.df_test, input_channels=3, min_filter=64, **dict_args)
+    model = Unet(7, hparams=parser.parse_args(), len_test_set=len(dm.df_test), input_channels=3,
+                 min_filter=64, **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
 
     # check, whether the run is inside a Docker container or not

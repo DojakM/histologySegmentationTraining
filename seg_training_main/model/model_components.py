@@ -1,46 +1,82 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn import init
+
+
+def init_weights(net, init_type='kaiming'):
+    # print('initialization method [%s]' % init_type)
+    if init_type == 'kaiming':
+        net.apply(weights_init_kaiming)
+    else:
+        raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
+
+
+def weights_init_kaiming(m):
+    classname = m.__class__.__name__
+    # print(classname)
+    if classname.find('Conv') != -1:
+        init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+    elif classname.find('Linear') != -1:
+        init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+    elif classname.find('BatchNorm') != -1:
+        init.normal_(m.weight.data, 1.0, 0.02)
+        init.constant_(m.bias.data, 0.0)
+
 
 class UnetConv(nn.Module):
-    def __init__(self, in_size, out_size, n = 2, ks = 3, stride= 1, padding= 2):
+    def __init__(self, in_size, out_size, is_batchnorm, n=2, ks=3, stride=1, padding=1):
         super(UnetConv, self).__init__()
-        self.padding = padding
-        self.stride = stride
-        self.ks = ks
         self.n = n
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_size, out_size, ks, padding=padding),
-            nn.BatchNorm2d(out_size),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_size, out_size, ks, padding=padding),
-            nn.BatchNorm2d(out_size),
-            nn.ReLU(inplace=True))
+        self.ks = ks
+        self.stride = stride
+        self.padding = padding
 
-    def forward(self, x):
-        x = self.conv()
+        if is_batchnorm:
+            self.conv = nn.Sequential(nn.Sequential(
+                nn.Conv2d(in_size, out_size, ks, padding=padding, stride=stride),
+                nn.BatchNorm2d(out_size),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(out_size, out_size, ks, padding=padding, stride=stride),
+                nn.BatchNorm2d(out_size),
+                nn.ReLU(inplace=True)))
+
+        else:
+            self.conv = nn.Sequential(nn.Sequential(
+                nn.Conv2d(in_size, out_size, ks, padding=padding, stride=stride),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(out_size, out_size, ks, padding=padding, stride=stride),
+                nn.ReLU(inplace=True)))
+
+        # initialise the blocks
+        for m in self.children():
+            init_weights(m, init_type='kaiming')
+
+    def forward(self, inputs):
+        conv = self.conv
+        x = conv(inputs)
+
         return x
+
 
 class UnetUp(nn.Module):
-    def __init__(self, in_ch, out_ch, bilinear=True):
+    def __init__(self, in_size, out_size, is_deconv, n_concat=2):
         super(UnetUp, self).__init__()
-
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.conv = UnetConv(in_size + (n_concat - 2) * out_size, out_size, False)
+        if is_deconv:
+            self.up = nn.ConvTranspose2d(in_size, out_size, kernel_size=2, stride=2, padding=0)
         else:
-            self.up = nn.ConvTranspose2d(in_ch // 2, in_ch // 2, 2, stride=2)
+            self.up = nn.Sequential(
+                nn.UpsamplingNearest2d(scale_factor=2),
+                nn.Conv2d(in_size, out_size, 1))
 
-        self.conv = UnetConv(in_ch, out_ch)
+        # initialise the blocks
+        for m in self.children():
+            if m.__class__.__name__.find('UnetConv') != -1:
+                continue
+            init_weights(m, init_type='kaiming')
 
-    def forward(self, x1, x2):
-        x1 = self.up(x1)
-
-        diffY = x2.size()[2] - x1.size()[2]
-        diffX = x2.size()[3] - x1.size()[3]
-
-        x1 = F.pad(x1, (diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2))
-        x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        return x
-
+    def forward(self, high_feature, low_feature):
+        outputs0 = self.up(high_feature)
+        outputs0 = torch.cat([outputs0, low_feature], 1)
+        return self.conv(outputs0)

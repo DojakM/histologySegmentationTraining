@@ -4,14 +4,14 @@ from typing import Any, Optional
 
 import pytorch_lightning as pl
 import torch
-import numpy as np
+
 
 
 class UnetSuper(pl.LightningModule):
     def __init__(self, num_classes, len_test_set: int, hparams, input_channels=1, min_filter=32, **kwargs):
         super(UnetSuper, self).__init__()
         self.num_classes = num_classes
-        self.metric = self.iou_score
+        self.metric = iou_fnc
         self.save_hyperparameters(hparams)
         self.args = kwargs
         self.len_test_set = len_test_set
@@ -20,10 +20,10 @@ class UnetSuper(pl.LightningModule):
             'adeelh/pytorch-multi-class-focal-loss',
             model='FocalLoss',
             alpha=torch.tensor(self.weights),
+            gamma=kwargs["gamma_factor"],
             reduction='mean',
             force_reload=False
         )
-        print(list(self.parameters()))
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -35,8 +35,8 @@ class UnetSuper(pl.LightningModule):
         parser.add_argument('--epsilon', type=float, default=1e-16, help='learning rate (default: 0.01)')
         parser.add_argument('--alpha', type=float, default=1, help='learning rate (default: 0.01)')
         # parser.add_argument('--model', type=str, default="u2net", help='learning rate (default: 0.01)')
-        parser.add_argument('--training-batch-size', type=int, default=20, help='Input batch size for training')
-        parser.add_argument('--test-batch-size', type=int, default=1000, help='Input batch size for testing')
+        parser.add_argument('--training-batch-size', type=int, default=6, help='Input batch size for training')
+        parser.add_argument('--test-batch-size', type=int, default=1, help='Input batch size for testing')
 
         return parser
 
@@ -79,24 +79,28 @@ class UnetSuper(pl.LightningModule):
         train_avg_iou = torch.stack([train_output['iou'] for train_output in training_step_outputs]).mean()
         self.log('train_avg_iou', train_avg_iou, sync_dist=True)
 
-    def validation_step(self, val_batch, batch_idx):
+    def validation_step(self, test_batch, batch_idx):
         """
-        Training the data as batches and returns training loss on each batch
-
-        :param val_batch: Batch data
+        Predicts on the test dataset to compute the current performance of the model.
+        :param test_batch: Batch data
         :param batch_idx: Batch indices
-
-        :return: output - Training loss
+        :return: output - Validation performance
         """
-        data, target, output, prediction = self.predict(val_batch, batch_idx)
-        self.val_iou = self.metric(prediction, target)
-        loss = self.loss(output, target)
-        self.log('val_IoU', self.val_iou[0].mean(), on_step=True, on_epoch=True, sync_dist=True)
-        self.log_tb_images(batch_idx, data, target, prediction)
-        for i in range(self.num_classes):
-            self.log(f'val_IoU_{i}', self.val_iou[0][i], on_step=True, on_epoch=True, sync_dist=True)
-        return {'loss': loss,
-                'iou': torch.mean(torch.stack([self.val_iou[0][2], self.val_iou[0][3], self.val_iou[0][4]]))}
+
+        output = {}
+
+        x, y = test_batch
+        prob_mask = self.forward(x)
+        loss = self.criterion(prob_mask, y.type(torch.long))
+
+        iter_iou, iter_count = iou_fnc(torch.argmax(prob_mask, dim=1).float(), y, self.args['n_class'])
+        for i in range(self.args['n_class']):
+            output['val_iou_' + str(i)] = torch.tensor(iter_iou[i])
+            output['val_iou_cnt_' + str(i)] = torch.tensor(iter_count[i])
+
+        output['val_loss'] = loss
+
+        return output
 
     def validation_epoch_end(self, validation_step_outputs):
         """
@@ -161,8 +165,10 @@ class UnetSuper(pl.LightningModule):
         """
         self.optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
         self.scheduler = {
-            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode="min", factor=0.1, patience=10,
-                                                                    min_lr=1e-6, verbose=True)
+            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer, mode='min', factor=0.1, patience=10, min_lr=1e-6, verbose=True,
+            ),
+            'monitor': 'train_avg_loss',
         }
         return [self.optimizer], [self.scheduler]
 
@@ -176,30 +182,28 @@ class UnetSuper(pl.LightningModule):
     #     prediction = label2rgb(alpha, img, pred)
     #     log = torch.stack([gt, prediction], dim=0)
     #     self.logger.experiment.add_images(f'Images and Masks Batch: {batch_idx}', log, self.current_epoch)
-    def iou_score(pred: torch.Tensor, target: torch.Tensor, n_classes: int = 5) -> (torch.Tensor, np.array):
-        """
-        Calculates IoU between a prediction and true label in a multi-class setting.
-        :param pred: Predicted label
-        :param target: True label
-        :param n_classes: Number of classes
-        :returns: IoU for different classes, and class occurences
-        """
-        ious = []
-        pred = pred.view(-1)
-        target = target.view(-1)
-        count = np.zeros(n_classes)
 
-        for cls in range(0, n_classes):
-            pred_inds = pred == cls
-            target_inds = target == cls
 
-            intersection = (pred_inds[target_inds]).long().sum().cpu().item()
-            union = pred_inds.long().sum().cpu().item() + target_inds.long().sum().cpu().item() - intersection  # .data.cpu()[0] - intersection
+def iou_fnc(pred, target, n_classes=12):
+    import numpy as np
 
-            if union == 0:
-                ious.append(0.0)
-            else:
-                count[cls] += 1
-                ious.append(float(intersection) / float(max(union, 1)))
+    ious = []
+    pred = pred.view(-1)
+    target = target.view(-1)
 
-        return torch.Tensor(ious).cuda(), count
+    count = np.zeros(n_classes)
+
+    for cls in range(0, n_classes):
+        pred_inds = pred == cls
+        target_inds = target == cls
+
+        intersection = (pred_inds[target_inds]).long().sum().cpu().item()
+        union = pred_inds.long().sum().cpu().item() + target_inds.long().sum().cpu().item() - intersection  # .data.cpu()[0] - intersection
+
+        if union == 0:
+            ious.append(0.0)
+        else:
+            count[cls] += 1
+            ious.append(float(intersection) / float(max(union, 1)))
+
+    return np.array(ious), count
