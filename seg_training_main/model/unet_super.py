@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 import torch
 
 from seg_training_main.utils import unnormalize, label2rgb
+from seg_training_main.losses.FocalLosses import FocalLoss
 
 
 class UnetSuper(pl.LightningModule):
@@ -17,15 +18,8 @@ class UnetSuper(pl.LightningModule):
         self.save_hyperparameters(hparams)
         self.args = kwargs
         self.len_test_set = len_test_set
-        self.weights = [0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-        self.criterion = torch.hub.load(
-            'adeelh/pytorch-multi-class-focal-loss',
-            model='FocalLoss',
-            alpha=torch.tensor(self.weights),
-            gamma=kwargs["gamma_factor"],
-            reduction='mean',
-            force_reload=False
-        )
+        self.weights = [0.00001, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+        self.criterion = FocalLoss(apply_nonlin=None, alpha=self.weights, gamma=2)
         self._to_console = False
 
     @staticmethod

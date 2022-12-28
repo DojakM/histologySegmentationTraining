@@ -27,7 +27,7 @@ from torch.utils.data import Dataset
 
 class ConicData(Dataset):
     classes = ['background', 'neutrophil', 'epithelial', 'lymphocyte', 'plasma', 'eosinophil', 'connective']
-    weights = [0.0001, 1, 1, 1, 1, 1, 1]
+    weights = [0.01, 1, 1, 1, 1, 1, 1]
     index = [0, 1, 2, 3, 4, 5, 6]
     class_weights = pd.DataFrame({'class_ids': index,
                                   'classes': classes,
@@ -54,8 +54,8 @@ class ConicData(Dataset):
                 img_raw = tiff.imread(img_path)
                 img = np.array(img_raw)[0:3, :, :]
                 label = np.array(img_raw)[3, :, :]
-                self.imgs.append(torch.from_numpy(img).float())
-                self.labels.append(torch.from_numpy(label).float())
+                self.imgs.append(img)
+                self.labels.append(label)
         else:
             imgs = np.load(self.np_dir + "images.npy")
             labels = np.load(self.np_dir + "labels.npy")[:, :, :, 1]
@@ -80,16 +80,19 @@ class ConicData(Dataset):
         label = warp(label, shift_trans, mode='edge')
         img = np.transpose(img, axes=[2, 0, 1])
         label = np.clip(np.rint(label), 0, len(self.classes) - 1)
-        return (img, label)
+        return img, label
 
     def __getitem__(self, index):
-        img, target = self.imgs[index], self.labels[index].int()
+        img, target = self.imgs[index], self.labels[index]
+        pair = (img, target)
         if self.apply_trans is not None:
-            augmented = self.apply_transformation(img.numpy(), target.numpy())
+            augmented = self.apply_transformation(img, target)
             img = augmented[0]
             target = augmented[1].astype('int64').squeeze()
             img = img.astype('float32')
-        return img, target
+            pair = (img, target)
+
+        return pair
 
     def full_download(self, download=True, unzip=True, create_patch=True, ome_tiff=False):
         """Method for downloading, unzipping, patching and creating segmentation masked ome.tiff

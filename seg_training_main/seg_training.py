@@ -12,6 +12,7 @@ from seg_training_main.model.unet_instance import Unet
 from data_loading.conic_data import ConicDataModule
 
 if __name__ == "__main__":
+    torch.autograd.set_detect_anomaly(True)
     parser = ArgumentParser(description='PyTorch Autolog PHDFM Example')
     parser.add_argument(
         '--general-seed',

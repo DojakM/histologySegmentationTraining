@@ -1,10 +1,7 @@
 from typing import Any
 
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from torch.nn import init
-import numpy as np
 
 from seg_training_main.model.model_components import UnetConv, UnetUp
 from seg_training_main.model.unet_super import UnetSuper
@@ -49,7 +46,10 @@ class Unet(UnetSuper):
         up1 = self.up_concat1(up2, conv1)  # 16*256*256
 
         final = self.final(up1)
-        return final
+        finalize = nn.functional.softmax(final)
+        self.print(final.size())
+        self.print(finalize.size())
+        return finalize
 
 
     def print(self, args: torch.Tensor) -> None:
