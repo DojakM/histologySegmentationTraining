@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from rich import print
+import torch
 
 from mlf_core.mlf_core import MLFCore
 from seg_training_main.model.unet_instance import Unet
@@ -55,6 +56,7 @@ if __name__ == "__main__":
             dict_args['accelerator'] = 'dp'
 
     dm = ConicDataModule(**dict_args)
+    dict_args["num_classes"] = 7
 
     #MLFCore.log_input_data('seg_training_main/data/PHDFM')
     if 'class_weights' not in dict_args.keys():
@@ -66,20 +68,19 @@ if __name__ == "__main__":
     dm.setup(stage='fit')
     # Supported batch size:24
     # Supported batch size:96
-    model = Unet(7, hparams=parser.parse_args(), len_test_set=len(dm.df_test), input_channels=3,
-                 min_filter=64, **dict_args)
+    model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64,  **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
 
     # check, whether the run is inside a Docker container or not
     if 'MLF_CORE_DOCKER_RUN' in os.environ:
         checkpoint_callback = ModelCheckpoint(filename="seg_training_main/mlruns/0", save_top_k=0, verbose=True,
-                                              monitor='train_avg_loss', mode='min')
+                                              monitor='train_mean_iou', mode='min')
         trainer = pl.Trainer.from_argparse_args(args, checkpoint_callback=checkpoint_callback, default_root_dir='/data',
                                                 logger=TensorBoardLogger('/data'))
         tensorboard_output_path = f'data/default/version_{trainer.logger.version}'
     else:
         checkpoint_callback = ModelCheckpoint(filename=f'{os.getcwd()}/mlruns/best', save_top_k=1,
-                                              verbose=True, monitor='val_avg_iou', mode='max')
+                                              verbose=True, monitor='val_mean_iou', mode='max')
         trainer = pl.Trainer.from_argparse_args(args, callbacks=[checkpoint_callback],
                                                 default_root_dir=os.getcwd() + "/mlruns",
                                                 logger=TensorBoardLogger('data'))

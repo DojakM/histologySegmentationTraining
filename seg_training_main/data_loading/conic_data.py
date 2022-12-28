@@ -18,10 +18,10 @@ import os
 from seg_training_main.data_loading.patch_extractor import PatchExtractor
 from seg_training_main.data_loading.utils import rm_n_mkdir, recur_find_ext, remap_label, cropping_center
 from skimage.transform import rotate
-# A function that applies a transformation to an image.
+from sklearn.model_selection import train_test_split
 from skimage.transform import warp, AffineTransform
 from torch.utils.data import DataLoader
-from torch.utils.data import Dataset, dataset
+from torch.utils.data import Dataset
 
 
 
@@ -65,7 +65,7 @@ class ConicData(Dataset):
         self.apply_trans = apply_trans
 
     def __len__(self):
-        return len(self.names)
+        return len(self.imgs)
 
     def apply_transformation(self, img, label):
         img = np.transpose(img, axes=[1, 2, 0])
@@ -295,25 +295,35 @@ class ConicDataModule(pt.LightningDataModule):
         self.val_data_loader = None
         self.test_data_loader = None
         self.args = kwargs
-        self.train_ids = [0,1,2,3,4,5,6,7,8,9]
-        self.test_ids = [10, 11, 12]
+        img_ids = list(range(0, 30))
+        self.train_ids, val_test_ids = train_test_split(img_ids, test_size=0.3, random_state=42)
+        self.val_ids, self.test_ids = train_test_split(val_test_ids, test_size=0.5, random_state=42)
         self.setup()
         self.prepare_data()
+
     def prepare_data(self, *args, **kwargs):
         pass
 
     def setup(self, stage=None):
         self.df_train = ConicData(self.train_ids, download=False, apply_trans=False)
+        self.df_val = ConicData(self.val_ids, download=False, apply_trans=False)
         self.df_test = ConicData(self.test_ids, download=False, apply_trans=False)
 
     def train_dataloader(self):
-        return DataLoader(self.df_train, batch_size=self.args['training_batch_size'], num_workers=self.args[
-            'num_workers'], shuffle=True)
+        """
+        :return: output - Train data loader for the given input
+        """
+        return DataLoader(self.df_train, batch_size=self.args['training_batch_size'], num_workers=self.args['num_workers'], shuffle=True)
 
     def test_dataloader(self):
+        """
+        :return: output - Test data loader for the given input
+        """
         return DataLoader(self.df_test, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'], shuffle=False)
 
     def val_dataloader(self):
-        return DataLoader(self.df_test, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'], shuffle=False)
-
-
+        """
+        :return: output - Val data loader for the given input
+        """
+        return DataLoader(self.df_val, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'],
+                          shuffle=False)

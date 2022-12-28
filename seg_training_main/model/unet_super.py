@@ -2,20 +2,22 @@ import abc
 from argparse import ArgumentParser
 from typing import Any, Optional
 
+import cv2
 import pytorch_lightning as pl
 import torch
 
+from seg_training_main.utils import unnormalize, label2rgb
 
 
 class UnetSuper(pl.LightningModule):
-    def __init__(self, num_classes, len_test_set: int, hparams, input_channels=1, min_filter=32, **kwargs):
+    def __init__(self, len_test_set: int, hparams, **kwargs):
         super(UnetSuper, self).__init__()
-        self.num_classes = num_classes
+        self.num_classes = kwargs["num_classes"]
         self.metric = iou_fnc
         self.save_hyperparameters(hparams)
         self.args = kwargs
         self.len_test_set = len_test_set
-        self.weights = kwargs['class_weights']
+        self.weights = [0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.criterion = torch.hub.load(
             'adeelh/pytorch-multi-class-focal-loss',
             model='FocalLoss',
@@ -24,19 +26,19 @@ class UnetSuper(pl.LightningModule):
             reduction='mean',
             force_reload=False
         )
+        self._to_console = False
 
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument('--num_workers', type=int, default=16, metavar='N', help='number of workers (default: 3)')
-        parser.add_argument('--lr', type=float, default=0.01, help='learning rate (default: 0.01)')
-        parser.add_argument('--gamma-factor', type=float, default=2.0, help='learning rate (default: 0.01)')
-        parser.add_argument('--weight-decay', type=float, default=1e-5, help='learning rate (default: 0.01)')
-        parser.add_argument('--epsilon', type=float, default=1e-16, help='learning rate (default: 0.01)')
-        parser.add_argument('--alpha', type=float, default=1, help='learning rate (default: 0.01)')
-        # parser.add_argument('--model', type=str, default="u2net", help='learning rate (default: 0.01)')
-        parser.add_argument('--training-batch-size', type=int, default=6, help='Input batch size for training')
-        parser.add_argument('--test-batch-size', type=int, default=1, help='Input batch size for testing')
+        parser.add_argument('--num_workers', type=int, default=10, metavar='N', help='number of workers (default: 2)')
+        parser.add_argument('--lr', type=float, default=0.0001, help='learning rate (default: 0.0001)')
+        parser.add_argument('--gamma-factor', type=float, default=0.02)
+        parser.add_argument('--training-batch-size', type=int, default=8, help='Input batch size for training')
+        parser.add_argument('--training-epochs', type=int, default=15, help='training epochs')
+        parser.add_argument('--test-batch-size', type=int, default=8, help='Input batch size for testing')
+        parser.add_argument('--test-percent', type=float, default=0.15, help='dataset percent for testing')
+        parser.add_argument('--test-epochs', type=int, default=10, help='epochs before testing')
 
         return parser
 
@@ -62,22 +64,50 @@ class UnetSuper(pl.LightningModule):
 
         :return: output - Training loss
         """
-        x, y, logits, y_hat = self.predict(train_batch, batch_idx)
-        loss = self.loss(logits, y)
-        self.train_iou = self.metric(y_hat, y)
-        self.log('train_IoU', self.train_iou[0].mean(), on_step=False, on_epoch=True)
-        for i in range(self.num_classes):
-            self.log(f'train_IoU_{i}', self.train_iou[0][i], on_step=False, on_epoch=True)
-        return {'loss': loss, 'iou': self.train_iou[0].mean()}
+        output = {}
+
+        x, y = train_batch
+        prob_mask = self.forward(x)
+        loss = self.criterion(prob_mask, y.type(torch.long))
+
+        iter_iou, iter_count = iou_fnc(torch.argmax(prob_mask, dim=1).float(), y, self.args['num_classes'])
+        for i in range(self.args['num_classes']):
+            output['iou_' + str(i)] = torch.tensor(iter_iou[i])
+            output['iou_cnt_' + str(i)] = torch.tensor(iter_count[i])
+
+        output['loss'] = loss
+
+        return output
 
     def training_epoch_end(self, training_step_outputs):
         """
         On each training epoch end, log the average training loss
         """
-        train_avg_loss = torch.stack([train_output['loss'] for train_output in training_step_outputs]).mean()
-        self.log('train_avg_loss', train_avg_loss, sync_dist=True)
-        train_avg_iou = torch.stack([train_output['iou'] for train_output in training_step_outputs]).mean()
-        self.log('train_avg_iou', train_avg_iou, sync_dist=True)
+        train_avg_loss = torch.stack([train_output['loss'] for train_output in training_step_outputs]).mean().item()
+
+        train_iou_sum = torch.zeros(self.args['num_classes'])
+        train_iou_cnt_sum = torch.zeros(self.args['num_classes'])
+        for i in range(self.args['num_classes']):
+            train_iou_sum[i] = torch.stack(
+                [train_output['iou_' + str(i)] for train_output in training_step_outputs]).sum()
+            train_iou_cnt_sum[i] = torch.stack(
+                [train_output['iou_cnt_' + str(i)] for train_output in training_step_outputs]).sum()
+        iou_scores = train_iou_sum / (train_iou_cnt_sum + 1e-10)
+
+        iou_mean = iou_scores[~torch.isnan(iou_scores)].mean().item()
+
+        self.log('train_avg_loss', train_avg_loss, sync_dist=True, on_step=False, on_epoch=True)
+        self.log('train_mean_iou', iou_mean, sync_dist=True, on_step=False, on_epoch=True)
+        for c in range(self.args['num_classes']):
+            if train_iou_cnt_sum[c] == 0.0:
+                iou_scores[c] = 0
+            self.log('train_iou_' + str(c), iou_scores[c].item(), sync_dist=True, on_step=False, on_epoch=True)
+
+        if self._to_console:
+            print('epoch {0:.1f} - loss: {1:.15f} - meanIoU: {3:.15f}'.format(self.current_epoch, train_avg_loss,
+                                                                              iou_mean))
+            for c in range(self.args['num_classes']):
+                print('class {} IoU: {}'.format(c, iou_scores[c].item()))
 
     def validation_step(self, test_batch, batch_idx):
         """
@@ -93,8 +123,8 @@ class UnetSuper(pl.LightningModule):
         prob_mask = self.forward(x)
         loss = self.criterion(prob_mask, y.type(torch.long))
 
-        iter_iou, iter_count = iou_fnc(torch.argmax(prob_mask, dim=1).float(), y, self.args['n_class'])
-        for i in range(self.args['n_class']):
+        iter_iou, iter_count = iou_fnc(torch.argmax(prob_mask, dim=1).float(), y, self.args['num_classes'])
+        for i in range(self.args['num_classes']):
             output['val_iou_' + str(i)] = torch.tensor(iter_iou[i])
             output['val_iou_cnt_' + str(i)] = torch.tensor(iter_count[i])
 
@@ -102,14 +132,37 @@ class UnetSuper(pl.LightningModule):
 
         return output
 
-    def validation_epoch_end(self, validation_step_outputs):
+    def validation_epoch_end(self, outputs):
         """
-        On each training epoch end, log the average training loss
+        Computes validation
+        :param outputs: outputs after every epoch end
+        :return: output - average validation loss
         """
-        val_avg_loss = torch.stack([val_output['loss'] for val_output in validation_step_outputs]).mean()
-        self.log('val_avg_loss', val_avg_loss, sync_dist=True)
-        val_avg_iou = torch.stack([val_output['iou'] for val_output in validation_step_outputs]).mean()
-        self.log('val_avg_iou', val_avg_iou, sync_dist=True)
+
+        test_avg_loss = torch.stack([test_output['val_loss'] for test_output in outputs]).mean().item()
+
+        test_iou_sum = torch.zeros(self.args['num_classes'])
+        test_iou_cnt_sum = torch.zeros(self.args['num_classes'])
+        for i in range(self.args['num_classes']):
+            test_iou_sum[i] = torch.stack([test_output['val_iou_' + str(i)] for test_output in outputs]).sum()
+            test_iou_cnt_sum[i] = torch.stack([test_output['val_iou_cnt_' + str(i)] for test_output in outputs]).sum()
+        iou_scores = test_iou_sum / (test_iou_cnt_sum + 1e-10)
+
+        iou_mean = iou_scores[~torch.isnan(iou_scores)].mean().item()
+
+        self.log('val_avg_loss', test_avg_loss, sync_dist=True, on_step=False, on_epoch=True)
+        self.log('val_mean_iou', iou_mean, sync_dist=True, on_step=False, on_epoch=True)
+        for c in range(self.args['num_classes']):
+            if test_iou_cnt_sum[c] == 0.0:
+                iou_scores[c] = 0
+            self.log('val_iou_' + str(c), iou_scores[c].item(), sync_dist=True, on_step=False, on_epoch=True)
+
+        if self._to_console:
+            print('eval ' + str(self.current_epoch) + ' ..................................................')
+            print('eLoss: {0:.15f} - eMeanIoU: {2:.15f}'.format(test_avg_loss,
+                                                                iou_mean))
+            for c in range(self.args['num_classes']):
+                print('class {} IoU: {}'.format(c, iou_scores[c].item()))
 
     def test_step(self, test_batch, batch_idx):
         """
@@ -121,16 +174,20 @@ class UnetSuper(pl.LightningModule):
         :return: output - Testing accuracy
         """
 
-        data, target, output, prediction = self.predict(test_batch, batch_idx)
-        self.test_iou = self.metric(prediction, target)
-        self.log('test_IoU', self.test_iou[0].mean(), on_step=False, on_epoch=True, sync_dist=True)
-        for i in range(self.num_classes):
-            self.log(f'test_IoU_{i}', self.test_iou[0][i], on_step=False, on_epoch=True, sync_dist=True)
-        # sum up batch loss
-        test_loss = self.loss(output, target)
-        # get the index of the max log-probability
-        correct = prediction.eq(target.data).sum()
-        return {'test_loss': test_loss, 'correct': correct}
+        output = {}
+
+        x, y = test_batch
+        prob_mask = self.forward(x)
+        loss = self.criterion(prob_mask, y.type(torch.long))
+
+        iter_iou, iter_count = iou_fnc(torch.argmax(prob_mask, dim=1).float(), y, self.args['num_classes'])
+        for i in range(self.args['num_classes']):
+            output['test_iou_' + str(i)] = torch.tensor(iter_iou[i])
+            output['test_iou_cnt_' + str(i)] = torch.tensor(iter_count[i])
+
+        output['test_loss'] = loss
+
+        return output
 
     def test_epoch_end(self, outputs):
         """
@@ -140,22 +197,35 @@ class UnetSuper(pl.LightningModule):
 
         :return: output - average test loss
         """
-        avg_test_loss = sum([test_output['test_loss'] for test_output in outputs]) / self.len_test_set
-        test_correct = float(sum([test_output['correct'] for test_output in outputs]))
-        self.log('avg_test_loss', avg_test_loss, sync_dist=True)
-        self.log('test_correct', test_correct, sync_dist=True)
+        test_avg_loss = torch.stack([test_output['test_loss'] for test_output in outputs]).mean().item()
+
+        test_iou_sum = torch.zeros(self.args['num_classes'])
+        test_iou_cnt_sum = torch.zeros(self.args['num_classes'])
+        for i in range(self.args['num_classes']):
+            test_iou_sum[i] = torch.stack([test_output['test_iou_' + str(i)] for test_output in outputs]).sum()
+            test_iou_cnt_sum[i] = torch.stack([test_output['test_iou_cnt_' + str(i)] for test_output in outputs]).sum()
+        iou_scores = test_iou_sum / (test_iou_cnt_sum + 1e-10)
+
+        iou_mean = iou_scores[~torch.isnan(iou_scores)].mean().item()
+
+        self.log('test_avg_loss', test_avg_loss, sync_dist=True, on_step=False, on_epoch=True)
+        self.log('test_mean_iou', iou_mean, sync_dist=True, on_step=False, on_epoch=True)
+        for c in range(self.args['num_classes']):
+            if test_iou_cnt_sum[c] == 0.0:
+                iou_scores[c] = 0
+            self.log('test_iou_' + str(c), iou_scores[c].item(), sync_dist=True, on_step=False, on_epoch=True)
+
+        if self._to_console:
+            print('eval ' + str(self.current_epoch) + ' ..................................................')
+            print('eLoss: {0:.15f} -  eMeanIoU: {2:.15f}'.format(test_avg_loss, iou_mean))
+            for c in range(self.args['num_classes']):
+                print('class {} IoU: {}'.format(c, iou_scores[c].item()))
 
     def prepare_data(self):
         """
         Prepares the data for training and prediction
         """
         return {}
-
-    def predict(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None):
-        data, target = batch
-        output = self.forward(data)
-        _, prediction = torch.max(output, dim=1)
-        return data, target, output, prediction
 
     def configure_optimizers(self):
         """
@@ -172,21 +242,20 @@ class UnetSuper(pl.LightningModule):
         }
         return [self.optimizer], [self.scheduler]
 
-    # def log_tb_images(self, batch_idx, x: torch.Tensor, y: torch.Tensor, y_hat: torch.Tensor, index=0):
-    #     img = cv2.cvtColor(unnormalize(x[index].cpu().detach().numpy().squeeze()), cv2.COLOR_GRAY2RGB).astype(int)
-    #     pred = y_hat[index].cpu().detach().numpy()
-    #     mask = y[index].cpu().detach().numpy()
-    #     alpha = 0.7
-    #     # Performing image overlay
-    #     gt = label2rgb(alpha, img, mask)
-    #     prediction = label2rgb(alpha, img, pred)
-    #     log = torch.stack([gt, prediction], dim=0)
-    #     self.logger.experiment.add_images(f'Images and Masks Batch: {batch_idx}', log, self.current_epoch)
+    def log_tb_images(self, batch_idx, x: torch.Tensor, y: torch.Tensor, y_hat: torch.Tensor, index=0):
+        img = cv2.cvtColor(unnormalize(x[index].cpu().detach().numpy().squeeze()), cv2.COLOR_GRAY2RGB).astype(int)
+        pred = y_hat[index].cpu().detach().numpy()
+        mask = y[index].cpu().detach().numpy()
+        alpha = 0.7
+        # Performing image overlay
+        gt = label2rgb(alpha, img, mask)
+        prediction = label2rgb(alpha, img, pred)
+        log = torch.stack([gt, prediction], dim=0)
+        self.logger.experiment.add_images(f'Images and Masks Batch: {batch_idx}', log, self.current_epoch)
 
 
-def iou_fnc(pred, target, n_classes=12):
+def iou_fnc(pred, target, n_classes=7):
     import numpy as np
-
     ious = []
     pred = pred.view(-1)
     target = target.view(-1)
