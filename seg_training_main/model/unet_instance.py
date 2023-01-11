@@ -1,10 +1,8 @@
-from typing import Any
-
 import torch
 import torch.nn as nn
 
-from seg_training_main.model.model_components import UnetConv, UnetUp
-from seg_training_main.model.unet_super import UnetSuper
+from .model_components import UnetConv, UnetUp
+from .unet_super import UnetSuper
 
 
 class Unet(UnetSuper):

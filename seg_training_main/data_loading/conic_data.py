@@ -5,7 +5,6 @@ from zipfile import ZipFile
 import cv2
 import pathlib
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import pytorch_lightning as pt
 import requests
@@ -298,7 +297,8 @@ class ConicDataModule(pt.LightningDataModule):
         self.val_data_loader = None
         self.test_data_loader = None
         self.args = kwargs
-        img_ids = list(range(0, 30))
+
+        img_ids = list(range(0, 4981))
         self.train_ids, val_test_ids = train_test_split(img_ids, test_size=0.3, random_state=42)
         self.val_ids, self.test_ids = train_test_split(val_test_ids, test_size=0.5, random_state=42)
         self.setup()
@@ -316,17 +316,20 @@ class ConicDataModule(pt.LightningDataModule):
         """
         :return: output - Train data loader for the given input
         """
-        return DataLoader(self.df_train, batch_size=self.args['training_batch_size'], num_workers=self.args['num_workers'], shuffle=True)
+        return DataLoader(self.df_train, batch_size=self.args['training_batch_size'], num_workers=self.args['num_workers'],
+                          shuffle=True, pin_memory=True)
 
     def test_dataloader(self):
         """
         :return: output - Test data loader for the given input
         """
-        return DataLoader(self.df_test, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'], shuffle=False)
+        return DataLoader(self.df_test, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'],
+                          shuffle=False, pin_memory=True)
 
     def val_dataloader(self):
         """
         :return: output - Val data loader for the given input
         """
         return DataLoader(self.df_val, batch_size=self.args['test_batch_size'], num_workers=self.args['num_workers'],
-                          shuffle=False)
+                          shuffle=False, pin_memory=True)
+

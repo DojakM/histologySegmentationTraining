@@ -1,6 +1,5 @@
 import abc
 from argparse import ArgumentParser
-from typing import Any, Optional
 
 import cv2
 import pytorch_lightning as pl
