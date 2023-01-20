@@ -1,4 +1,4 @@
-name: seg_training_main
+name: seg_training
 channels:
   - defaults
   - conda-forge

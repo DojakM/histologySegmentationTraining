@@ -1,10 +1,12 @@
 import abc
 from argparse import ArgumentParser
+from typing import Any, Optional
 
 import cv2
 import pytorch_lightning as pl
 import torch
 
+from torch_optimizer import AdaBelief
 from seg_training_main.utils import unnormalize, label2rgb
 from seg_training_main.losses.FocalLosses import FocalLoss
 
@@ -19,20 +21,20 @@ class UnetSuper(pl.LightningModule):
         self.len_test_set = len_test_set
         self.weights = [0.00001, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
         self.criterion = FocalLoss(apply_nonlin=None, alpha=self.weights, gamma=2)
-        self._to_console = False
+        self._to_console = True
 
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument('--num_workers', type=int, default=10, metavar='N', help='number of workers (default: 2)')
-        parser.add_argument('--lr', type=float, default=0.0001, help='learning rate (default: 0.0001)')
-        parser.add_argument('--gamma-factor', type=float, default=0.02)
-        parser.add_argument('--training-batch-size', type=int, default=8, help='Input batch size for training')
-        parser.add_argument('--training-epochs', type=int, default=15, help='training epochs')
-        parser.add_argument('--test-batch-size', type=int, default=8, help='Input batch size for testing')
-        parser.add_argument('--test-percent', type=float, default=0.15, help='dataset percent for testing')
-        parser.add_argument('--test-epochs', type=int, default=10, help='epochs before testing')
-
+        parser.add_argument('--num_workers', type=int, default=16, metavar='N', help='number of workers (default: 3)')
+        parser.add_argument('--lr', type=float, default=0.01, help='learning rate (default: 0.01)')
+        parser.add_argument('--gamma-factor', type=float, default=2.0, help='learning rate (default: 0.01)')
+        parser.add_argument('--weight-decay', type=float, default=1e-5, help='learning rate (default: 0.01)')
+        parser.add_argument('--epsilon', type=float, default=1e-16, help='learning rate (default: 0.01)')
+        parser.add_argument('--alpha', type=float, default=1, help='learning rate (default: 0.01)')
+        parser.add_argument('--model', type=str, default="u2net", help='learning rate (default: 0.01)')
+        parser.add_argument('--training-batch-size', type=int, default=20, help='Input batch size for training')
+        parser.add_argument('--test-batch-size', type=int, default=1000, help='Input batch size for testing')   
         return parser
 
     @abc.abstractmethod
@@ -226,13 +228,12 @@ class UnetSuper(pl.LightningModule):
 
         :return: output - Initialized optimizer and scheduler
         """
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
-        self.scheduler = {
-            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, mode='min', factor=0.1, patience=10, min_lr=1e-6, verbose=True,
-            ),
-            'monitor': 'train_avg_loss',
-        }
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.args['lr'])
+        self.scheduler = {  'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(
+                                    self.optimizer, mode='min', factor=0.1, patience=10, min_lr=1e-6, verbose=True,
+                                    ),
+                                    'monitor': 'train_avg_loss',
+                                    }
         return [self.optimizer], [self.scheduler]
 
     def log_tb_images(self, batch_idx, x: torch.Tensor, y: torch.Tensor, y_hat: torch.Tensor, index=0):

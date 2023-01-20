@@ -1,16 +1,18 @@
 import os
 from argparse import ArgumentParser
+import mlflow
 import pytorch_lightning as pl
-import torch.cuda
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from rich import print
+import torch
 
 from seg_training_main.mlf_core.mlf_core import MLFCore
 from seg_training_main.model.unet_instance import Unet
 from seg_training_main.data_loading.conic_data import ConicDataModule
 
 if __name__ == "__main__":
+    torch.autograd.set_detect_anomaly(True)
     parser = ArgumentParser(description='PyTorch Autolog PHDFM Example')
     parser.add_argument(
         '--general-seed',
@@ -22,7 +24,7 @@ if __name__ == "__main__":
         '--pytorch-seed',
         type=int,
         default=0,
-        help='Random seed of all Pytorch functions',
+    help='Random seed of all Pytorch functions',
     )
     parser.add_argument(
         '--log-interval',
@@ -33,7 +35,7 @@ if __name__ == "__main__":
     parser = pl.Trainer.add_argparse_args(parent_parser=parser)
     parser = Unet.add_model_specific_args(parent_parser=parser)
     # log conda env and system information
-    #MLFCore.log_sys_intel_conda_env()
+    # MLFCore.log_sys_intel_conda_env()
     # parse cli arguments
     args = parser.parse_args()
     dict_args = vars(args)
@@ -41,18 +43,18 @@ if __name__ == "__main__":
     # number of gpus to make linter bit less restrict in terms of naming
     general_seed = dict_args['general_seed']
     pytorch_seed = dict_args['pytorch_seed']
-    num_of_gpus = 0
+    num_of_gpus = 2
 
     MLFCore.set_general_random_seeds(general_seed)
     MLFCore.set_pytorch_random_seeds(pytorch_seed, num_of_gpus)
 
     if 'accelerator' in dict_args:
         if dict_args['accelerator'] == 'None':
-            dict_args['accelerator'] = None
-        elif dict_args['accelerator'] != 'ddp':
+            dict_args['accelerator'] = 'None'
+        elif dict_args['accelerator'] != 'dp':
             print(
                 f'[bold red]{dict_args["accelerator"]}[bold blue] currently not supported. Switching to [bold green]ddp!')
-            dict_args['accelerator'] = 'ddp'
+            dict_args['accelerator'] = 'dp'
 
     dm = ConicDataModule(**dict_args)
     dict_args["num_classes"] = 7
@@ -69,7 +71,6 @@ if __name__ == "__main__":
     # Supported batch size:96
     model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64,  **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
-
     # check, whether the run is inside a Docker container or not
     if 'MLF_CORE_DOCKER_RUN' in os.environ:
         checkpoint_callback = ModelCheckpoint(filename="seg_training_main/mlruns/0", save_top_k=0, verbose=True,
@@ -82,8 +83,9 @@ if __name__ == "__main__":
                                               verbose=True, monitor='val_mean_iou', mode='max')
         trainer = pl.Trainer.from_argparse_args(args, callbacks=[checkpoint_callback],
                                                 default_root_dir=os.getcwd() + "/mlruns",
-                                                logger=TensorBoardLogger('seg_training_main/data'))
-        lr_monitor = LearningRateMonitor(logging_interval='epoch')
+                                                logger=TensorBoardLogger('data'),
+                                                gpus=-1,
+                                                )
         tensorboard_output_path = f'data/default/version_{trainer.logger.version}'
 
     trainer.deterministic = True
@@ -93,5 +95,5 @@ if __name__ == "__main__":
     trainer.test()
     print(f'\n[bold blue]For tensorboard log, call [bold green]tensorboard --logdir={tensorboard_output_path}')
     print(checkpoint_callback.best_model_score.item())
-    with open('seg_training_main/best.txt', 'w') as f:
+    with open('best.txt', 'w') as f:
         f.write(str(checkpoint_callback.best_model_score.item()))

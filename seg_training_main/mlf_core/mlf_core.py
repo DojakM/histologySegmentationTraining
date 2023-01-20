@@ -51,7 +51,7 @@ class MLFCore:
     @staticmethod
     def set_pytorch_random_seeds(seed, num_gpus):
         torch.manual_seed(seed)
-        torch._set_deterministic(True)
+        torch.use_deterministic_algorithms(True)
         print(num_gpus)
         if num_gpus > 0:
             torch.cuda.manual_seed(seed)
