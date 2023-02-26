@@ -32,14 +32,13 @@ class ConicData(Dataset):
                                   'classes': classes,
                                   'weights': weights},
                                  columns=["class_ids", "classes", "weights"])
-
     def __init__(self, ids: list, download: bool = False, from_ome_tiff: bool = True, apply_trans=True):
         super(ConicData, self).__init__()
         self.ids = ids
         self.imgs = []
         self.labels = []
-        self.img_dir = "/Users/dominikmolitor/Documents/mathesis/seg_training/seg_training_main/data/OME-TIFFs/"
-        self.np_dir = "/Users/dominikmolitor/Documents/mathesis/seg_training/seg_training_main/data/patches/"
+        self.img_dir = "../data/OME-TIFFs/"
+        self.np_dir = "../data/patches/"
         self.names = pd.read_csv(self.np_dir + "patch_info.csv")
         self.count = pd.read_csv(self.np_dir + "counts.csv")
         if download:
@@ -131,13 +130,10 @@ class ConicData(Dataset):
         print("Image region 1 has been downloaded")
         image_region2 = requests.get("https://warwick.ac.uk/fac/cross_fac/tia/data/lizard/lizard_images2.zip")
         print("Image region 2 has been downloaded")
-        # overlays = requests.get("https://warwick.ac.uk/fac/cross_fac/tia/data/lizard/overlay.zip")
-        # print("Overlays have been downloaded")
         labels = requests.get("https://warwick.ac.uk/fac/cross_fac/tia/data/lizard/lizard_labels.zip")
         print("Labels have been downloaded")
         open(download + "img1.zip", "wb").write(image_region1.content)
         open(download + "img2.zip", "wb").write(image_region2.content)
-        # open(download + "over.zip", "wb").write(overlays.content)
         open(download + "img_labels.zip", "wb").write(labels.content)
 
     @staticmethod
@@ -297,8 +293,9 @@ class ConicDataModule(pt.LightningDataModule):
         self.val_data_loader = None
         self.test_data_loader = None
         self.args = kwargs
+        print(glob.glob("/Users/dominikmolitor/PycharmProjects/seg_training/seg_training_main/data/images/*.png"))
+        img_ids = list(range(0, len(glob.glob("/Users/dominikmolitor/PycharmProjects/seg_training/seg_training_main/data/images/*.png"))))
 
-        img_ids = list(range(0, 4981))
         self.train_ids, val_test_ids = train_test_split(img_ids, test_size=0.3, random_state=42)
         self.val_ids, self.test_ids = train_test_split(val_test_ids, test_size=0.5, random_state=42)
         self.setup()
