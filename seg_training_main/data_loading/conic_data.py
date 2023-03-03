@@ -25,24 +25,19 @@ from torch.utils.data import Dataset
 
 
 class ConicData(Dataset):
-    classes = ['background', 'neutrophil', 'epithelial', 'lymphocyte', 'plasma', 'eosinophil', 'connective']
-    weights = [0.01, 1, 1, 1, 1, 1, 1]
-    index = [0, 1, 2, 3, 4, 5, 6]
-    class_weights = pd.DataFrame({'class_ids': index,
-                                  'classes': classes,
-                                  'weights': weights},
-                                 columns=["class_ids", "classes", "weights"])
-    def __init__(self, ids: list, download: bool = False, from_ome_tiff: bool = True, apply_trans=True):
+    workdir = os.getcwd()
+    def __init__(self, ids: list, download: bool,
+                 from_source: bool = False, from_ome_tiff: bool = False, apply_trans=True):
         super(ConicData, self).__init__()
         self.ids = ids
         self.imgs = []
         self.labels = []
-        self.img_dir = "../data/OME-TIFFs/"
-        self.np_dir = "../data/patches/"
+        self.img_dir = self.workdir + "/seg_training_main/data/OME-TIFFs/"
+        self.np_dir = self.workdir + "/seg_training_main/data/patches/"
         self.names = pd.read_csv(self.np_dir + "patch_info.csv")
         self.count = pd.read_csv(self.np_dir + "counts.csv")
-        if download:
-            self.full_download()
+        if from_source:
+            self.from_source()
         if not self._check_exists:
             raise RuntimeError("Dataset not found!")
         if from_ome_tiff:
@@ -77,7 +72,7 @@ class ConicData(Dataset):
         img = warp(img, shift_trans, mode='edge')
         label = warp(label, shift_trans, mode='edge')
         img = np.transpose(img, axes=[2, 0, 1])
-        label = np.clip(np.rint(label), 0, len(self.classes) - 1)
+        label = np.clip(np.rint(label), 0, 6)
         return img, label
 
     def __getitem__(self, index):
@@ -92,32 +87,23 @@ class ConicData(Dataset):
 
         return pair
 
-    def full_download(self, download=True, unzip=True, create_patch=True, ome_tiff=False):
-        """Method for downloading, unzipping, patching and creating segmentation masked ome.tiff
+    def from_source(self):
+        """Method for downloading, unzipping, patching and creating segmentation masked ome.tiff"""
+        self._download_files()
+        for zip_file in glob.glob(self.workdir + "/seg_training_main/data/download/img*"):
+            self._unzip_files(zip_file)
+            os.remove(zip_file)
+        for file in glob.glob(self.workdir + "/seg_training_main/data/Lizard_I*/*"):
+            file_name = file.split("/")[-1]
+            shutil.copyfile(file, os.path.join(self.workdir + "/seg_training_main//data/images/", file_name))
+            os.remove(file)
+        self._create_patches()
+        self._numpy_to_ome_tiff()
 
-            download: Whether files should be downloaded
-            unzip: Whether files should be unzipped, necessitates download once before
-            create_patch: Whether creates patches from raw images, necessitates unzip once before
-            ome_tiff: Whether generates ome.tiff with segmentations masks, necessitates create_patch once before
-            """
-        if download:
-            self._download_files()
-        if unzip:
-            for zip_file in glob.glob("../data/download/img*"):
-                self._unzip_files(zip_file)
-                os.remove(zip_file)
-            for file in glob.glob("../data/Lizard_I*/*"):
-                file_name = file.split("/")[-1]
-                shutil.copyfile(file, os.path.join("../data/images/", file_name))
-                os.remove(file)
-        if create_patch:
-            self._create_patches()
-        if ome_tiff:
-            self._numpy_to_ome_tiff()
 
     @staticmethod
     def _check_exists():
-        if len(glob.glob("../data/patches/*")) > 0:
+        if len(glob.glob(os.getcwd() + "seg_training_main/data/patches/*")) > 0:
             return True
         else:
             return False
@@ -258,17 +244,13 @@ class ConicData(Dataset):
         nuclei_counts_df.to_csv(out_dir + "counts.csv", index=False)
         patch_names_df.to_csv(out_dir + "patch_info.csv", index=False)
 
-    def return_classes(self):
-        return self.classes
-
-    @staticmethod
-    def _numpy_to_ome_tiff():
-        data_folder = "../data/patches/"
+    def _numpy_to_ome_tiff(self):
+        data_folder = self.workdir + "/seg_training_main/data/patches/"
         labels = np.load(data_folder + "labels.npy")
         images = np.load(data_folder + "images.npy")
         segmentations = labels[:, :, :, 0]
         classifications = labels[:, :, :, 1]
-        info = pd.read_csv("../data/patches/patch_info.csv")
+        info = pd.read_csv(self.workdir + "/seg_training_main/data/patches/patch_info.csv")
         for ids in range(len(images)):
             image = images[ids]
             classification = classifications[ids]
@@ -286,6 +268,7 @@ class ConicData(Dataset):
 class ConicDataModule(pt.LightningDataModule):
     def __init__(self, **kwargs):
         super(ConicDataModule, self).__init__()
+        self.wrkdir = os.getcwd()
         self.df_train = None
         self.df_val = None
         self.df_test = None
@@ -293,8 +276,7 @@ class ConicDataModule(pt.LightningDataModule):
         self.val_data_loader = None
         self.test_data_loader = None
         self.args = kwargs
-        print(glob.glob("/Users/dominikmolitor/PycharmProjects/seg_training/seg_training_main/data/images/*.png"))
-        img_ids = list(range(0, len(glob.glob("/Users/dominikmolitor/PycharmProjects/seg_training/seg_training_main/data/images/*.png"))))
+        img_ids = list(range(0, len(glob.glob(self.workdir + "/seg_training_main/data/images/*.png"))))
 
         self.train_ids, val_test_ids = train_test_split(img_ids, test_size=0.3, random_state=42)
         self.val_ids, self.test_ids = train_test_split(val_test_ids, test_size=0.5, random_state=42)
@@ -305,9 +287,9 @@ class ConicDataModule(pt.LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        self.df_train = ConicData(self.train_ids, download=False, apply_trans=False)
-        self.df_val = ConicData(self.val_ids, download=False, apply_trans=False)
-        self.df_test = ConicData(self.test_ids, download=False, apply_trans=False)
+        self.df_train = ConicData(self.train_ids, apply_trans=False, download=self.args["download"])
+        self.df_val = ConicData(self.val_ids, apply_trans=False, download=self.args["downloads"])
+        self.df_test = ConicData(self.test_ids, apply_trans=False, download=self.args["downloads"])
 
     def train_dataloader(self):
         """
