@@ -19,7 +19,7 @@ jobs:
     - name: Publish to Registry
       uses: elgohr/Publish-Docker-Github-Action@master
       with:
-        name: asd/seg_training_main
+        name: asd/histology_segmentation_training
         username: asd
         password: '${{ secrets.MLF_CORE_SYNC_TOKEN}}'
         registry: ghcr.io

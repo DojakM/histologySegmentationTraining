@@ -1,4 +1,4 @@
-name: Train seg_training_main using CPU
+name: Train histology_segmentation_training using CPU
 
 on: [push, pull_request]
 
@@ -17,7 +17,7 @@ jobs:
         uses: docker/build-push-action@v1
         with:
           dockerfile: Dockerfile
-          repository: ghcr.io/asd/seg_training_main
+          repository: ghcr.io/asd/histology_segmentation_training
           tags: 0.1.0-SNAPSHOT
           push: false
 

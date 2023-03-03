@@ -20,4 +20,4 @@ jobs:
         run: pip install bandit
 
       - name: Run bandit
-        run: bandit -r seg_training_main -c .bandit.yml
+        run: bandit -r histology_segmentation_training -c .bandit.yml

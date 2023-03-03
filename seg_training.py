@@ -1,5 +1,6 @@
 import os
 from argparse import ArgumentParser
+
 import mlflow
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -7,13 +8,13 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from rich import print
 import torch
 
-from seg_training_main.mlf_core.mlf_core import MLFCore
-from seg_training_main.model.unet_instance import Unet
-from seg_training_main.data_loading.conic_data import ConicDataModule
+from histology_segmentation_training.mlf_core.mlf_core import MLFCore
+from histology_segmentation_training.model.unet_instance import Unet
+from histology_segmentation_training.data_loading.conic_data import ConicDataModule
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
-    parser = ArgumentParser(description='PyTorch Autolog PHDFM Example')
+    parser = ArgumentParser()
     parser.add_argument(
         '--general-seed',
         type=int,
@@ -32,10 +33,23 @@ if __name__ == "__main__":
         default=100,
         help='log interval of stdout',
     )
+    parser.add_argument(
+        '--download',
+        type=bool,
+        default=False,
+        help='If the data should be downloaded from Zenodo'
+    )
+    parser.add_argument(
+        '--from-source',
+        type=bool,
+        default=False,
+        help='Downloads the underlying source data and applies necessary changes'
+    )
     parser = pl.Trainer.add_argparse_args(parent_parser=parser)
     parser = Unet.add_model_specific_args(parent_parser=parser)
+    mlflow.autolog(True)
     # log conda env and system information
-    # MLFCore.log_sys_intel_conda_env()
+    #MLFCore.log_sys_intel_conda_env()
     # parse cli arguments
     args = parser.parse_args()
     dict_args = vars(args)
@@ -59,15 +73,10 @@ if __name__ == "__main__":
             dict_args['accelerator'] = 'cpu'
     dm = ConicDataModule(**dict_args)
     dict_args["num_classes"] = 7
-
-    #MLFCore.log_input_data('seg_training_main/data/PHDFM')
-    if 'class_weights' not in dict_args.keys():
-        weights = dm.df_train.class_weights
-        dict_args['class_weights'] = weights['weights'].tolist()
+    #MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
 
     dm.setup(stage='fit')
-    # Supported batch size:24
-    # Supported batch size:96
+    # NEEDS to be changed
     if torch.cuda.is_available():
         model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True, **dict_args)
         model.cuda()
@@ -77,7 +86,7 @@ if __name__ == "__main__":
 
     # check, whether the run is inside a Docker container or not
     if 'MLF_CORE_DOCKER_RUN' in os.environ:
-        checkpoint_callback = ModelCheckpoint(filename="seg_training_main/mlruns/0", save_top_k=0, verbose=True,
+        checkpoint_callback = ModelCheckpoint(filename="seg_training_main/mlruns/ckpt", save_top_k=0, verbose=True,
                                               monitor='train_mean_iou', mode='min')
         trainer = pl.Trainer.from_argparse_args(args, checkpoint_callback=checkpoint_callback, default_root_dir='/data',
                                                 logger=TensorBoardLogger('/data'))
@@ -88,21 +97,17 @@ if __name__ == "__main__":
         if torch.cuda.is_available():
             trainer = pl.Trainer.from_argparse_args(args, callbacks=[checkpoint_callback],
                                                     default_root_dir=os.getcwd() + "/mlruns",
-                                                    logger=TensorBoardLogger('seg_training_main/data'),
+                                                    logger=TensorBoardLogger('histology_segmentation_training/out'),
                                                     gpus=[0])
         else:
             trainer = pl.Trainer.from_argparse_args(args, callbacks=[checkpoint_callback],
                                                     default_root_dir=os.getcwd() + "/mlruns",
-                                                    logger=TensorBoardLogger('seg_training_main/data'))
+                                                    logger=TensorBoardLogger('histology_segmentation_training/out'))
         tensorboard_output_path = f'data/default/version_{trainer.logger.version}'
 
     trainer.deterministic = True
     trainer.benchmark = False
     trainer.log_every_n_steps = dict_args['log_interval']
     trainer.fit(model, dm)
-    trainer.test()
+    trainer.test(datamodule=dm)
     print(f'\n[bold blue]For tensorboard log, call [bold green]tensorboard --logdir={tensorboard_output_path}')
-    print(checkpoint_callback.best_model_score.item())
-    torch.save(model.state_dict(), 'model.pth')
-    with open('seg_training_main/best.txt', 'w') as f:
-        f.write(str(checkpoint_callback.best_model_score.item()))
