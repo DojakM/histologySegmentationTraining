@@ -1,17 +1,17 @@
 domain: mlflow
 language: pytorch
-project_slug: histology_segmentation_training
+project_slug: histology-segmentation-training
 project_slug_no_hyphen: histology_segmentation_training
 template_version: '1.0.0 # <<MLF-CORE_NO_BUMP>>'
 template_handle: mlflow-pytorch
-github_username: asd
-creator_github_username: asd
+github_username: DojakM
+creator_github_username: DojakM
 is_github_repo: true
-is_repo_private: true
+is_repo_private: false
 is_github_orga: false
-full_name: Dominik Jakob Molitoer
-email: quit
+full_name: Dominik Jakob Molitor
+email: Dominik-jakob.molitor@protonmail.com
 project_name: histology_segmentation_training
 project_short_description: Segmentation training module for medical imaging
-version: 0.1.0-SNAPSHOT
+version: 1.0
 license: MIT
