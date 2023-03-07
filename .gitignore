@@ -371,13 +371,9 @@ dmypy.json
 /seg_training_main/data/images/pannuke_26.png
 /seg_training_main/data/images/pannuke_27.png
 /seg_training_main/data/images/pannuke_28.png
-/seg_training_main/data/Lizard_Labels/
-/seg_training_main/data/Lizard_Labels/Labels/
 /seg_training_main/data/Lizard_Labels/info.csv
 /seg_training_main/data/Lizard_Labels/read_label.py
 /seg_training_main/data/Lizard_Labels/README.md
-/seg_training_main/data/OME-TIFFs/
-/seg_training_main/data/patches/
 /seg_training_main/data/patches/counts.csv
 /seg_training_main/data/patches/images.npy
 /seg_training_main/data/patches/labels.npy
