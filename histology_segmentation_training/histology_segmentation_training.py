@@ -8,9 +8,9 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from rich import print
 import torch
 
-from histology_segmentation_training.mlf_core.mlf_core import MLFCore
-from histology_segmentation_training.model.unet_instance import Unet
-from histology_segmentation_training.data_loading.conic_data import ConicDataModule
+from model import unet_instance
+from mlf_core.mlf_core import MLFCore
+from data_loading.conic_data import ConicDataModule
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
@@ -49,7 +49,10 @@ if __name__ == "__main__":
     parser = Unet.add_model_specific_args(parent_parser=parser)
     mlflow.autolog(True)
     # log conda env and system information
-    #MLFCore.log_sys_intel_conda_env()
+    try:
+        MLFCore.log_sys_intel_conda_env()
+    except:
+        print("logging conda environment did not work")
     # parse cli arguments
     args = parser.parse_args()
     dict_args = vars(args)
@@ -78,10 +81,11 @@ if __name__ == "__main__":
     dm.setup(stage='fit')
     # NEEDS to be changed
     if torch.cuda.is_available():
-        model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True, **dict_args)
+        model = unet_instance.Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
+                               **dict_args)
         model.cuda()
     else:
-        model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
+        model = unet_instance.Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
 
     # check, whether the run is inside a Docker container or not
@@ -97,12 +101,12 @@ if __name__ == "__main__":
         if torch.cuda.is_available():
             trainer = pl.Trainer.from_argparse_args(args, callbacks=[checkpoint_callback],
                                                     default_root_dir=os.getcwd() + "/mlruns",
-                                                    logger=TensorBoardLogger('histology_segmentation_training/out'),
+                                                    logger=TensorBoardLogger('out'),
                                                     gpus=[0])
         else:
             trainer = pl.Trainer.from_argparse_args(args, callbacks=[checkpoint_callback],
                                                     default_root_dir=os.getcwd() + "/mlruns",
-                                                    logger=TensorBoardLogger('histology_segmentation_training/out'))
+                                                    logger=TensorBoardLogger('out'))
         tensorboard_output_path = f'data/default/version_{trainer.logger.version}'
 
     trainer.deterministic = True

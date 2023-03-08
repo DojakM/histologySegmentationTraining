@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from histology_segmentation_training.model.model_components import UnetConv, UnetUp
-from histology_segmentation_training.model.unet_super import UnetSuper
+from model_components import UnetConv, UnetUp
+from unet_super import UnetSuper
 from histology_segmentation_training.utils import weights_init
 
 

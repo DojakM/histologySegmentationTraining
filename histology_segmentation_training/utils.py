@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import torch
 
-
 def label2rgb(alpha, img, mask):
     labeled_img = cv2.addWeighted(decode_segmap(mask).transpose(1, 2, 0).astype(int), alpha, img.astype(int), 1 - alpha,
                                   0)

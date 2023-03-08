@@ -14,8 +14,9 @@ import torch
 import tqdm
 import numpy as np
 import os
-from histology_segmentation_training.data_loading.patch_extractor import PatchExtractor
-from histology_segmentation_training.data_loading.utils import rm_n_mkdir, recur_find_ext, remap_label, cropping_center
+
+from .patch_extractor import PatchExtractor
+from .utils import rm_n_mkdir, recur_find_ext, remap_label, cropping_center
 from skimage.transform import rotate
 from sklearn.model_selection import train_test_split
 from skimage.transform import warp, AffineTransform

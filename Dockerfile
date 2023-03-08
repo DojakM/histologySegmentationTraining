@@ -1,4 +1,4 @@
-FROM mlfcore/base:1.0.0
+FROM mlfcore/base:0.1
 
 # Install the conda environment
 RUN sudo apt-get update

@@ -4,7 +4,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-from histology_segmentation_training.data_loading.utils import cropping_center
+from .utils import cropping_center
 
 
 class PatchExtractor(object):

@@ -3,8 +3,7 @@ from argparse import ArgumentParser
 import pytorch_lightning as pl
 import torch
 
-from histology_segmentation_training.losses.FocalLosses import FocalLoss
-
+from losses.FocalLosses import FocalLoss
 
 class UnetSuper(pl.LightningModule):
     def __init__(self, len_test_set: int, hparams, **kwargs):

@@ -5,9 +5,8 @@ Credits
 Development Lead
 ----------------
 
-* Dominik Jakob Molitoer <quit>
+* Dominik Jakob Molitor
 
 Contributors
 ------------
 
-None yet. Why not be the first?
