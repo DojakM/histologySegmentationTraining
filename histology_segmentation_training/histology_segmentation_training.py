@@ -8,9 +8,9 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from rich import print
 import torch
 
-from model import unet_instance
-from mlf_core.mlf_core import MLFCore
 from data_loading.conic_data import ConicDataModule
+from mlf_core.mlf_core import MLFCore
+from models.unet_instance import Unet
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
@@ -81,11 +81,11 @@ if __name__ == "__main__":
     dm.setup(stage='fit')
     # NEEDS to be changed
     if torch.cuda.is_available():
-        model = unet_instance.Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
+        model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
                                **dict_args)
         model.cuda()
     else:
-        model = unet_instance.Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
+        model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
 
     # check, whether the run is inside a Docker container or not

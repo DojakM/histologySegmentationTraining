@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-
 class UnetConv(nn.Module):
     def __init__(self, in_size, out_size, is_batchnorm, n=2, ks=3, stride=1, padding=1,gpus=False,dropout_val=0):
         super(UnetConv, self).__init__()
