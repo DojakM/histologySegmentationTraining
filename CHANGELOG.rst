@@ -5,12 +5,12 @@ Changelog
 This project adheres to `Semantic Versioning <https://semver.org/>`_.
 
 
-0.1.0-SNAPSHOT (2022-11-06)
+1.0.0
 ---------------------------------------------
 
 **Added**
 
-* Created the project using mlf-core
+* Allows training of a Unet on the Lizard Dataset
 
 **Fixed**
 
