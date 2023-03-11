@@ -1,4 +1,4 @@
-artifact_uri: file:///Users/dominikmolitor/PycharmProjects/seg_training/mlruns/0/720a716cd8b940e6bd000b47e0cae4a5/artifacts
+artifact_uri: file:///Users/dominikmolitor/PycharmProjects/histology_segmentation_training/mlruns/0/720a716cd8b940e6bd000b47e0cae4a5/artifacts
 end_time: null
 entry_point_name: ''
 experiment_id: '0'

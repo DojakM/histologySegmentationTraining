@@ -31,7 +31,7 @@ class UnetSuper(pl.LightningModule):
         parser.add_argument('--weight-decay', type=float, default=1e-5, help='learning rate (default: 0.01)')
         parser.add_argument('--epsilon', type=float, default=1e-16, help='learning rate (default: 0.01)')
         parser.add_argument('--alpha', type=float, default=1, help='learning rate (default: 0.01)')
-        parser.add_argument('--models', type=str, default="u2net", help='learning rate (default: 0.01)')
+        parser.add_argument('--models', type=str, default="unet", help='the wanted model')
         parser.add_argument('--training-batch-size', type=int, default=10, help='Input batch size for training')
         parser.add_argument('--test-batch-size', type=int, default=500, help='Input batch size for testing')
         parser.add_argument('--dropout-val', type=float, default=0, help='dropout_value for layers')

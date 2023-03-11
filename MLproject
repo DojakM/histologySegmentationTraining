@@ -4,12 +4,12 @@
 # License: MIT
 
 
-name: histologysegmentationtraining
+name: histology_segmentation_training
 
-# conda_env: environment.yml
-docker_env:
-  image: ghcr.io/asd/seg_training:1.0
-  volumes: ["${PWD}/data:/data"]
+conda_env: environment.yml
+# docker_env:
+#   image: ghcr.io/asd/histology_segmentation_training:1.0
+#   volumes: ["${PWD}/data:/data"]
 
 entry_points:
   main:
@@ -23,7 +23,7 @@ entry_points:
       learning-rate: {type: float, default: 0.02}
       log-interval: {type: int, default: 100}
     command: |
-          python seg_training/seg_training.py \
+          python histology_segmentation_training/histology_segmentation_training.py \
             --cuda {cuda} \
             --epochs {epochs} \
             --general-seed {general-seed} \

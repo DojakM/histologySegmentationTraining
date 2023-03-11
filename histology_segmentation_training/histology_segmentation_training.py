@@ -8,7 +8,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from rich import print
 import torch
 
-from data_loading.conic_data import ConicDataModule
+from data_loading.data_loader import ConicDataModule
 from mlf_core.mlf_core import MLFCore
 from models.unet_instance import Unet
 
@@ -76,10 +76,8 @@ if __name__ == "__main__":
             dict_args['accelerator'] = 'cpu'
     dm = ConicDataModule(**dict_args)
     dict_args["num_classes"] = 7
-    #MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
-
+    MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
     dm.setup(stage='fit')
-    # NEEDS to be changed
     if torch.cuda.is_available():
         model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
                                **dict_args)
