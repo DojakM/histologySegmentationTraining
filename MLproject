@@ -14,8 +14,6 @@ conda_env: environment.yml
 entry_points:
   main:
     parameters:
-      cuda: {type: string, default: 'True'}
-      epochs: {type: int, default: 5}
       general-seed: {type: int, default: 0}
       pytorch-seed: {type: int, default: 0}
       training-batch-size: {type: int, default: 129}
@@ -24,11 +22,9 @@ entry_points:
       log-interval: {type: int, default: 100}
     command: |
           python histology_segmentation_training/histology_segmentation_training.py \
-            --cuda {cuda} \
-            --epochs {epochs} \
             --general-seed {general-seed} \
             --pytorch-seed {pytorch-seed} \
             --training-batch-size {training-batch-size} \
             --test-batch-size {test-batch-size} \
-            --learning-rate {learning-rate} \
+            --lr {learning-rate} \
             --log-interval {log-interval}
