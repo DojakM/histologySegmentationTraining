@@ -10,7 +10,7 @@ import torch
 
 from data_loading.data_loader import ConicDataModule
 from mlf_core.mlf_core import MLFCore
-from models.unet_instance import Unet
+from models.unet_instance import Unet, RTUnet
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
@@ -44,6 +44,12 @@ if __name__ == "__main__":
         type=bool,
         default=False,
         help='Downloads the underlying source data and applies necessary changes'
+    )
+    parser.add_argument(
+        '--model',
+        type=str,
+        default="Unet",
+        help="Selects Model used for training. Currently available Unet and Unet + SPT"
     )
     parser = pl.Trainer.add_argparse_args(parent_parser=parser)
     parser = Unet.add_model_specific_args(parent_parser=parser)
@@ -79,11 +85,11 @@ if __name__ == "__main__":
     MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
     dm.setup(stage='fit')
     if torch.cuda.is_available():
-        model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
+        model = RTUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
                                **dict_args)
         model.cuda()
     else:
-        model = Unet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
+        model = RTUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
 
     # check, whether the run is inside a Docker container or not

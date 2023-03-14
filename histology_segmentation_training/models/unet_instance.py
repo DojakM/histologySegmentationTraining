@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.model_components import UnetConv, UnetUp
+from models.model_components import UnetConv, UnetUp, UnetSPT
 from models.unet_super import UnetSuper
 from utils import weights_init
 
@@ -60,7 +60,7 @@ class Unet(UnetSuper):
     def print(self, args: torch.Tensor) -> None:
         print(args)
 
-class UnetSpatial(UnetSuper):
+class RTUnet(UnetSuper):
         def __init__(self, len_test_set, hparams, input_channels, is_deconv=True,
                      is_batchnorm=True, on_gpu=False, **kwargs):
             super().__init__(len_test_set=len_test_set, hparams=hparams, **kwargs)
@@ -69,10 +69,10 @@ class UnetSpatial(UnetSuper):
             self.is_batchnorm = is_batchnorm
             self.input = input_channels
             filters = [32, 64, 128, 256]
-            self.conv1 = UnetConv(self.in_channels, filters[0], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            self.conv2 = UnetConv(filters[0], filters[1], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            self.conv3 = UnetConv(filters[1], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            self.center = UnetConv(filters[2], filters[3], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+            self.conv1 = UnetSPT(self.in_channels, filters[0], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+            self.conv2 = UnetSPT(filters[0], filters[1], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+            self.conv3 = UnetSPT(filters[1], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+            self.center = UnetSPT(filters[2], filters[3], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
             # upsampling
             self.up_concat3 = UnetUp(filters[3], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
             self.up_concat2 = UnetUp(filters[2], filters[1], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
@@ -113,6 +113,4 @@ class UnetSpatial(UnetSuper):
 
         def print(self, args: torch.Tensor) -> None:
             print(args)
-
-
 

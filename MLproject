@@ -1,5 +1,5 @@
 # Author: Dominik Jakob Molitor
-# Email: quit
+# Email: dominik-jakob.molitor@protonmail.com
 # Version: 0.1
 # License: MIT
 
@@ -16,10 +16,12 @@ entry_points:
     parameters:
       general-seed: {type: int, default: 0}
       pytorch-seed: {type: int, default: 0}
-      training-batch-size: {type: int, default: 129}
+      training-batch-size: {type: int, default: 128}
       test-batch-size: {type: int, default: 128}
-      learning-rate: {type: float, default: 0.02}
+      learning-rate: {type: float, default: 0.003}
       log-interval: {type: int, default: 100}
+      dropout-val: {type: float, default: 0.001}
+      accelerator: {type:str, default: gpu}
     command: |
           python histology_segmentation_training/histology_segmentation_training.py \
             --general-seed {general-seed} \
@@ -27,4 +29,6 @@ entry_points:
             --training-batch-size {training-batch-size} \
             --test-batch-size {test-batch-size} \
             --lr {learning-rate} \
-            --log-interval {log-interval}
+            --log-interval {log-interval}\
+            --accelerator {accelerator}\
+            --dropout-val {dropout-val}
