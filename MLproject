@@ -20,7 +20,7 @@ entry_points:
       test-batch-size: {type: int, default: 128}
       learning-rate: {type: float, default: 0.003}
       log-interval: {type: int, default: 100}
-      dropout-val: {type: float, default: 0.001}
+      dropout-val: {type: float, default: 0.01}
       accelerator: {type:str, default: gpu}
     command: |
           python histology_segmentation_training/histology_segmentation_training.py \

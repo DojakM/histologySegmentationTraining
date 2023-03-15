@@ -1,16 +1,11 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torchvision
-from torchvision import transforms
-import matplotlib.pyplot as plt
-import numpy as np
 import torch.nn.functional as F
 
 
 
 class UnetConv(nn.Module):
-    def __init__(self, in_size, out_size, is_batchnorm, n=2, ks=3, stride=1, padding=1,gpus=False,dropout_val=0):
+    def __init__(self, in_size, out_size, is_batchnorm, n=2, ks=3, stride=1, padding=1,gpus=False,dropout_val=0.001):
         super(UnetConv, self).__init__()
         self.n = n
         self.ks = ks

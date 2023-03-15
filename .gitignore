@@ -129,6 +129,7 @@ dmypy.json
 .pyre/
 
 # Jetbrains IDE
+mlruns/0/*
 .idea/
 /seg_training_main/data/
 /seg_training_main/data/download/

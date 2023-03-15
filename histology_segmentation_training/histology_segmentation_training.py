@@ -9,8 +9,8 @@ from rich import print
 import torch
 
 from data_loading.data_loader import ConicDataModule
-from mlf_core.mlf_core import MLFCore
 from models.unet_instance import Unet, RTUnet
+from mlf_core.mlf_core import MLFCore
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
@@ -66,6 +66,7 @@ if __name__ == "__main__":
     # number of gpus to make linter bit less restrict in terms of naming
     general_seed = dict_args['general_seed']
     pytorch_seed = dict_args['pytorch_seed']
+    dict_args["max_epochs"] = 250
     num_of_gpus = torch.cuda.device_count()
 
     MLFCore.set_general_random_seeds(general_seed)
