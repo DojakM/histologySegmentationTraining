@@ -4,9 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 
 
-
 class UnetConv(nn.Module):
-    def __init__(self, in_size, out_size, is_batchnorm, n=2, ks=3, stride=1, padding=1,gpus=False,dropout_val=0.001):
+    def __init__(self, in_size, out_size, is_batchnorm, n=2, ks=3, stride=1, padding=1, gpus=False, dropout_val=0.001):
         super(UnetConv, self).__init__()
         self.n = n
         self.ks = ks
@@ -33,6 +32,7 @@ class UnetConv(nn.Module):
                 nn.ReLU(inplace=True)))
         if gpus:
             self.conv.cuda()
+
     def forward(self, inputs):
         conv = self.conv
         x = conv(inputs)
@@ -63,7 +63,7 @@ class UnetSPT(nn.Module):
     def __init__(self, in_size, out_size, dim_h, stride=1, ks=3, dropout_val=0, gpus=False):
         super(UnetSPT, self).__init__()
         self.dim_h = dim_h
-        self.ought = int(np.floor((np.floor((dim_h-6)/2)-4)/2))
+        self.ought = int(np.floor((np.floor((dim_h - 6) / 2) - 4) / 2))
 
         self.conv = nn.Sequential(nn.Sequential(
             nn.Dropout(dropout_val),
@@ -77,16 +77,16 @@ class UnetSPT(nn.Module):
 
         # spatial transformer localization network
         self.localization = nn.Sequential(
-            nn.Conv2d(in_size, 8, kernel_size=7), # 256*256*3
-            nn.MaxPool2d(2, stride=2), #250*250*8
+            nn.Conv2d(in_size, 8, kernel_size=7),  # 256*256*3
+            nn.MaxPool2d(2, stride=2),  # 250*250*8
             nn.ReLU(True),
-            nn.Conv2d(8, 16, kernel_size=5), #125*125*8
-            nn.MaxPool2d(2, stride=2), #121*121*16
-            nn.ReLU(True) #60*60*16
+            nn.Conv2d(8, 16, kernel_size=5),  # 125*125*8
+            nn.MaxPool2d(2, stride=2),  # 121*121*16
+            nn.ReLU(True)  # 60*60*16
         )
         # tranformation regressor for theta
         self.fc_loc = nn.Sequential(
-            nn.Linear((self.ought**2)*16, 32),
+            nn.Linear((self.ought ** 2) * 16, 32),
             nn.ReLU(True),
             nn.Linear(32, 3 * 2)
         )
@@ -96,21 +96,54 @@ class UnetSPT(nn.Module):
                                                     dtype=torch.float))
 
     def stn(self, x):
-        #============= RUNS BUT IS POSSIBLY FALSE =============#
+        # ============= RUNS BUT IS POSSIBLY FALSE =============#
         xs = self.localization(x)
-        xs = xs.view(-1, xs.size(1)*xs.size(2)*xs.size(3))
-
-
-        #============= DOES NOT WORK ============#
+        xs = xs.view(-1, xs.size(1) * xs.size(2) * xs.size(3))
+        # ============= DOES NOT WORK ============#
         theta = self.fc_loc(xs)
-
-        #============== SHOULD WORK =============#
+        # ============== SHOULD WORK =============#
         theta = theta.view(-1, 2, 3)
         grid = F.affine_grid(theta, x.size())
         x = F.grid_sample(x, grid)
         return x
+
     def forward(self, x):
         # transform the input
+
         x = self.stn(x)
         x = self.conv(x)
+
+        return x
+
+
+class Context(nn.Module):
+    def __init__(self, in_size, out_size, gpus=False):
+        super(Context, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.BatchNorm2d(in_size),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_size, out_size, 3),
+            nn.Dropout2d(p=0.3),
+            nn.BatchNorm2d(out_size),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_size, out_size, 3)
+        )
+    def forward(self, x):
+        x = self.conv1(x)
+        return x
+
+class Localization(nn.Module):
+    def __init__(self, in_size, out_size, dropout_val = 0):
+        super(Localization, self).__init__()
+        self.conv = nn.Sequential(nn.Sequential(
+            nn.Dropout(dropout_val),
+            nn.Conv2d(in_size, out_size, kernel_size=3),
+            nn.BatchNorm2d(out_size),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout_val),
+            nn.Conv2d(out_size, out_size, kernel_size=1),
+            nn.BatchNorm2d(out_size),
+            nn.ReLU(inplace=True)))
+    def forward(self, x):
+        self.conv(x)
         return x

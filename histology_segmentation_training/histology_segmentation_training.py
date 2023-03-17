@@ -9,7 +9,7 @@ from rich import print
 import torch
 
 from data_loading.data_loader import ConicDataModule
-from models.unet_instance import Unet, RTUnet
+from models.unet_instance import Unet, RTUnet, ContextUnet
 from mlf_core.mlf_core import MLFCore
 
 if __name__ == "__main__":
@@ -90,7 +90,7 @@ if __name__ == "__main__":
                                **dict_args)
         model.cuda()
     else:
-        model = RTUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
+        model = ContextUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
 
     # check, whether the run is inside a Docker container or not

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.model_components import UnetConv, UnetUp, UnetSPT
+from models.model_components import UnetConv, UnetUp, UnetSPT, Context, Localization
 from models.unet_super import UnetSuper
 from utils import weights_init
 
@@ -114,3 +114,37 @@ class RTUnet(UnetSuper):
         def print(self, args: torch.Tensor) -> None:
             print(args)
 
+class ContextUnet(UnetSuper):
+    def __init__(self, len_test_set, hparams, input_channels, is_deconv=True,
+                 is_batchnorm=True, on_gpu=False, **kwargs):
+        super().__init__(len_test_set=len_test_set, hparams=hparams, **kwargs)
+        self.in_channels = input_channels
+        self.is_deconv = is_deconv
+        self.is_batchnorm = is_batchnorm
+        self.input = input_channels
+        filters = [32, 64, 128, 256]
+        self.conv1 = UnetConv(self.in_channels, filters[0], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.context1 = Context(filters[0], filters[1], gpus=on_gpu)
+        self.ttt1 = UnetConv(filters[1], filters[1], True, stride=2, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.context2 = Context(filters[1], filters[2], gpus=on_gpu)
+        self.ttt2 = UnetConv(filters[2], filters[2], True, stride=2, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.context3 = Context(filters[2], filters[3], gpus=on_gpu)
+        self.ttt3 = UnetConv(filters[3], filters[3], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.center = Context(filters[3], filters[3], gpus=on_gpu)
+        self.up1 = UnetUp(filters[3], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.local1 = Localization(filters[2], filters[2])
+        self.up2 = UnetUp(filters[2], filters[1],  True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.local2 = Localization(filters[1], filters[1])
+        self.up3 = UnetUp(filters[1], filters[0], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.local3 = Localization(filters[0], filters[0])
+        self.up4 = UnetUp(filters[0], 7,  True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+
+
+
+
+    def forward(self, x):
+        maxpool = nn.MaxPool2d(kernel_size=2)
+        con = self.conv1(x)
+        son = self.context1(con)
+        x = con + son
+        return x
