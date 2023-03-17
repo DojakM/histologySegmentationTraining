@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 
 
@@ -59,49 +60,57 @@ class UnetUp(nn.Module):
 
 
 class UnetSPT(nn.Module):
-    def __init__(self, in_size, out_size, stride=1, ks=3, dropout_val=0, gpus=False):
+    def __init__(self, in_size, out_size, dim_h, stride=1, ks=3, dropout_val=0, gpus=False):
         super(UnetSPT, self).__init__()
+        self.dim_h = dim_h
+        self.ought = int(np.floor((np.floor((dim_h-6)/2)-4)/2))
 
-        # Spatial localization
-        self.localization = nn.Sequential(
+        self.conv = nn.Sequential(nn.Sequential(
             nn.Dropout(dropout_val),
-            nn.Conv2d(in_size, out_size, kernel_size=ks),
-            nn.MaxPool2d(2, stride=stride),
+            nn.Conv2d(in_size, out_size, ks, padding=1, stride=stride),
+            nn.BatchNorm2d(out_size),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout_val),
-            nn.Conv2d(out_size, out_size, kernel_size=ks),
-            nn.MaxPool2d(2, stride=stride),
-            nn.ReLU(inplace=True))
+            nn.Conv2d(out_size, out_size, ks, padding=1, stride=stride),
+            nn.BatchNorm2d(out_size),
+            nn.ReLU(inplace=True)))
+
+        # spatial transformer localization network
+        self.localization = nn.Sequential(
+            nn.Conv2d(in_size, 8, kernel_size=7), # 256*256*3
+            nn.MaxPool2d(2, stride=2), #250*250*8
+            nn.ReLU(True),
+            nn.Conv2d(8, 16, kernel_size=5), #125*125*8
+            nn.MaxPool2d(2, stride=2), #121*121*16
+            nn.ReLU(True) #60*60*16
+        )
+        # tranformation regressor for theta
         self.fc_loc = nn.Sequential(
-            nn.Linear(10 * 3 * 3, 32),
+            nn.Linear((self.ought**2)*16, 32),
             nn.ReLU(True),
             nn.Linear(32, 3 * 2)
-            )
+        )
+        # initializing the weights and biases with identity transformations
         self.fc_loc[2].weight.data.zero_()
-        self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
+        self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0],
+                                                    dtype=torch.float))
 
-        # Regressor for the 3 * 2 affine matrix
     def stn(self, x):
+        #============= RUNS BUT IS POSSIBLY FALSE =============#
         xs = self.localization(x)
-        xs = xs.view(-1, 10 * 3 * 3)
-        theta = self.fc_loc(xs)
-        theta = theta.view(-1, 2, 3)
+        xs = xs.view(-1, xs.size(1)*xs.size(2)*xs.size(3))
 
-        # Initialize the weights/bias with identity transformation
+
+        #============= DOES NOT WORK ============#
+        theta = self.fc_loc(xs)
+
+        #============== SHOULD WORK =============#
+        theta = theta.view(-1, 2, 3)
         grid = F.affine_grid(theta, x.size())
         x = F.grid_sample(x, grid)
-
         return x
-
     def forward(self, x):
         # transform the input
         x = self.stn(x)
-
-        # Perform the usual forward pass
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = x.view(-1, 320)
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, training=self.training)
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        x = self.conv(x)
+        return x

@@ -28,7 +28,7 @@ from torch.utils.data import Dataset
 class ConicData(Dataset):
     workdir = os.getcwd()
     def __init__(self, ids: list, download: bool,
-                 from_source: bool = False, from_ome_tiff: bool = True, apply_trans=True):
+                 from_source: bool = False, from_ome_tiff: bool = True, apply_trans=False):
         super(ConicData, self).__init__()
         self.ids = ids
         self.imgs = []

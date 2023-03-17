@@ -69,8 +69,8 @@ if __name__ == "__main__":
     dict_args["max_epochs"] = 250
     num_of_gpus = torch.cuda.device_count()
 
-    MLFCore.set_general_random_seeds(general_seed)
-    MLFCore.set_pytorch_random_seeds(pytorch_seed, num_of_gpus)
+    #MLFCore.set_general_random_seeds(general_seed)
+    #MLFCore.set_pytorch_random_seeds(pytorch_seed, num_of_gpus)
 
     if 'accelerator' in dict_args:
         if dict_args['accelerator'] == 'gpu':
@@ -83,7 +83,7 @@ if __name__ == "__main__":
             dict_args['accelerator'] = 'cpu'
     dm = ConicDataModule(**dict_args)
     dict_args["num_classes"] = 7
-    MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
+    #MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
     dm.setup(stage='fit')
     if torch.cuda.is_available():
         model = RTUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
