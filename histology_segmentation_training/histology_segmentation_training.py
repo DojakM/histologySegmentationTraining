@@ -90,7 +90,7 @@ if __name__ == "__main__":
                                **dict_args)
         model.cuda()
     else:
-        model = ContextUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
+        model = RTUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
 
     # check, whether the run is inside a Docker container or not

@@ -96,25 +96,35 @@ class UnetSPT(nn.Module):
                                                     dtype=torch.float))
 
     def stn(self, x):
-        # ============= RUNS BUT IS POSSIBLY FALSE =============#
         xs = self.localization(x)
         xs = xs.view(-1, xs.size(1) * xs.size(2) * xs.size(3))
-        # ============= DOES NOT WORK ============#
         theta = self.fc_loc(xs)
-        # ============== SHOULD WORK =============#
         theta = theta.view(-1, 2, 3)
         grid = F.affine_grid(theta, x.size())
+        x = F.grid_sample(x, grid)
+        return x, theta
+
+    def rev_stn(self, x, theta: torch.tensor):
+        empty_tensor = torch.empty(theta.size())
+        for val, batch in enumerate(theta):
+            new_theta = torch.cat((batch, torch.tensor([[0,0,1]])), 0)
+            theta = new_theta.inverse()
+            theta = theta[:2,:]
+            empty_tensor[val, :, :] = theta
+        grid = F.affine_grid(empty_tensor, x.size())
         x = F.grid_sample(x, grid)
         return x
 
     def forward(self, x):
         # transform the input
 
-        x = self.stn(x)
+        x, theta = self.stn(x)
         x = self.conv(x)
+        x = self.rev_stn(x, theta)
 
         return x
 
+#### ==== In Testing ==== ####
 
 class Context(nn.Module):
     def __init__(self, in_size, out_size, gpus=False):

@@ -60,6 +60,7 @@ class Unet(UnetSuper):
     def print(self, args: torch.Tensor) -> None:
         print(args)
 
+#### ==== model with spatial transformer ==== ####
 class RTUnet(UnetSuper):
         def __init__(self, len_test_set, hparams, input_channels, is_deconv=True,
                      is_batchnorm=True, on_gpu=False, **kwargs):
@@ -111,9 +112,8 @@ class RTUnet(UnetSuper):
             finalize = nn.functional.softmax(final, dim=1)
             return finalize
 
-        def print(self, args: torch.Tensor) -> None:
-            print(args)
 
+#### ==== Context Unet - just testing ==== ####
 class ContextUnet(UnetSuper):
     def __init__(self, len_test_set, hparams, input_channels, is_deconv=True,
                  is_batchnorm=True, on_gpu=False, **kwargs):
