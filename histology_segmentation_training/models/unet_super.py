@@ -34,7 +34,7 @@ class UnetSuper(pl.LightningModule):
         parser.add_argument('--training-batch-size', type=int, default=10, help='Input batch size for training')
         parser.add_argument('--test-batch-size', type=int, default=500, help='Input batch size for testing')
         parser.add_argument('--dropout-val', type=float, default=0, help='dropout_value for layers')
-        parser.add_argument('--flat-weights', type=bool, default=True, help='set all weights to 0.01')
+        parser.add_argument('--flat-weights', type=bool, default=False, help='set all weights to 0.01')
         return parser
 
     @abc.abstractmethod

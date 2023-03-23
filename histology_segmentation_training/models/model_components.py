@@ -59,9 +59,9 @@ class UnetUp(nn.Module):
         return self.conv(outputs0)
 
 #### ==== Spatial Transformer kinda doesn't do anything ==== ####
-class SPTTo(nn.Module):
-    def __init__(self, in_size, out_size, stride=1, ks=3, dropout_val=0, gpus=False):
-        super(SPTTo, self).__init__()
+class SPTnet(nn.Module):
+    def __init__(self, in_size, out_size, val, stride=1, ks=3, dropout_val=0, gpus=False):
+        super(SPTnet, self).__init__()
 
         self.conv = nn.Sequential(nn.Sequential(
             nn.Dropout(dropout_val),
@@ -75,7 +75,7 @@ class SPTTo(nn.Module):
 
         # spatial transformer localization network
         self.localization = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=7),  # 256*256*3
+            nn.Conv2d(in_size, 32, kernel_size=7),  # 256*256*3
             nn.MaxPool2d(2, stride=2),  # 250*250*8
             nn.ReLU(True),
             nn.Conv2d(32, 64, kernel_size=5),  # 125*125*8
@@ -84,7 +84,7 @@ class SPTTo(nn.Module):
         )
         # tranformation regressor for theta
         self.fc_loc = nn.Sequential(
-            nn.Linear(1024, 16),
+            nn.Linear(val**2, 16),
             nn.Linear(16, 3 * 2)
         )
         self.fc_loc[1].weight.data.zero_()
@@ -113,27 +113,7 @@ class SPTTo(nn.Module):
     def forward(self, x):
         x, theta = self.stn(x)
         x = self.conv(x)
-        return x, theta
-
-class SPTBack(nn.Module):
-    def __init__(self, in_size, out_size):
-        super(SPTBack, self).__init__()
-        self.conv = nn.Conv2d(in_size, out_size, 1)
-
-    def rev_stn(self, x, theta: torch.tensor):
-        empty_tensor = torch.empty(theta.size())
-        for val, batch in enumerate(theta):
-            new_theta = torch.cat((batch, torch.tensor([[0, 0, 1]])), 0)
-            theta = new_theta.inverse()
-            theta = theta[:2, :]
-            empty_tensor[val, :, :] = theta
-        grid = F.affine_grid(empty_tensor, x.size())
-        x = F.grid_sample(x, grid)
-        return x
-
-    def forward(self, x, theta):
-        x = self.conv(x)
-        self.rev_stn(x, theta)
+        x = self.rev_stn(x, theta)
         return x
 
 

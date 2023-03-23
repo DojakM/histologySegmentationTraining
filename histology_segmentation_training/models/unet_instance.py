@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.model_components import UnetConv, UnetUp, SPTTo, SPTBack, Context, Localization
+from models.model_components import UnetConv, UnetUp, SPTnet, Context, Localization
 from models.unet_super import UnetSuper
 from utils import weights_init
 
@@ -71,17 +71,16 @@ class RTUnet(UnetSuper):
             self.input = input_channels
             filters = [8, 16, 32, 64]
 
-            self.conv1 = SPTTo(self.in_channels, filters[0], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            self.conv2 = UnetConv(filters[0], filters[1], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            #self.conv3 = UnetConv(filters[1], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            self.center = UnetConv(filters[1], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+            self.conv1 = SPTnet(self.in_channels, filters[0], 32,  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+            self.conv2 = UnetConv(filters[0], filters[1], 16,  True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+            self.center = UnetConv(filters[1], filters[2], 8, True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
             # upsampling
             self.up_concat3 = UnetUp(filters[3], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
             self.up_concat2 = UnetUp(filters[2], filters[1], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
             self.up_concat1 = UnetUp(filters[1], filters[0], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
 
             # final conv (without any concat)
-            self.final = SPTBack(filters[0], 7)
+            self.final = nn.Conv2d(filters[0], 7, 1)
             if on_gpu:
                 self.conv1.cuda()
                 self.conv2.cuda()
@@ -104,7 +103,7 @@ class RTUnet(UnetSuper):
             for chunks in along_x:
                 merge_y = []
                 for chunk in chunks:
-                    conv1, theta = self.conv1(chunk)  # 16*64*64
+                    conv1 = self.conv1(chunk)  # 16*64*64
                     maxpool1 = maxpool(conv1)  # 16*32*32
 
                     conv2 = self.conv2(maxpool1)  # 32*32*32
@@ -116,7 +115,7 @@ class RTUnet(UnetSuper):
                     up2 = self.up_concat2(center, conv2)  # 32*32*32
                     up1 = self.up_concat1(up2, conv1)  # 16*64*64
 
-                    final = self.final(up1, theta)
+                    final = self.final(up1)
                     finalize = nn.functional.softmax(final, dim=1)
                     merge_y.append(finalize)
                 merge_x.append(torch.cat(merge_y, 3))
