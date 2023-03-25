@@ -15,9 +15,9 @@ class UnetSuper(pl.LightningModule):
         self.args = kwargs
         self.len_test_set = len_test_set
         if kwargs["flat_weights"]:
-            self.weights = [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+            self.weights = [1, 1, 1, 1, 1, 1, 1]
         else:
-            self.weights = [0.0001, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+            self.weights = [0.001, 1, 1, 1, 1, 1, 1]
         self.criterion = FocalLoss(apply_nonlin=None, alpha=self.weights, gamma=2.0)
         self.criterion.cuda()
         self._to_console = False
