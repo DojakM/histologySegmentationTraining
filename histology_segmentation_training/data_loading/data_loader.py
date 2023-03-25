@@ -277,7 +277,7 @@ class ConicDataModule(pt.LightningDataModule):
         self.val_data_loader = None
         self.test_data_loader = None
         self.args = kwargs
-        img_ids = list(range(0, len(glob.glob(self.workdir + "/histology_segmentation_training/data/images/*.png"))))
+        img_ids = list(range(0, 4981))
 
         self.train_ids, val_test_ids = train_test_split(img_ids, test_size=0.3, random_state=42)
         self.val_ids, self.test_ids = train_test_split(val_test_ids, test_size=0.5, random_state=42)

@@ -86,11 +86,11 @@ if __name__ == "__main__":
     #MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
     dm.setup(stage='fit')
     if torch.cuda.is_available():
-        model = RTUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
+        model = ContextUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
                                **dict_args)
         model.cuda()
     else:
-        model = RTUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
+        model = ContextUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
 
     # check, whether the run is inside a Docker container or not
