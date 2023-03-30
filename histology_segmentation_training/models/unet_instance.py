@@ -1,24 +1,29 @@
 import torch
 import torch.nn as nn
-from models.model_components import UnetConv, UnetUp, SPTnet, ContextModule, Localization, SimpleUnetConv, \
-    SimpleUnetUp, SegmentationLayer
+from models.model_components import *
 from models.unet_super import UnetSuper
 from utils import weights_init
+import sys
 
-
+def __getattr__(name):
+    return getattr(sys.modules[__name__], name)
 class Unet(UnetSuper):
-    def __init__(self, len_test_set, hparams, input_channels, is_deconv=True,
-                 is_batchnorm=True, on_gpu=False, **kwargs):
-        super().__init__(len_test_set=len_test_set, hparams=hparams, **kwargs)
+    """Unet
+
+    Basic Unet which is used for medical image segmentation and classification
+    original paper: https://arxiv.org/pdf/1505.04597
+    """
+    def __init__(self, hparams, input_channels, is_deconv=True, is_batchnorm=True, on_gpu=False, **kwargs):
+        super().__init__( hparams=hparams, **kwargs)
         self.in_channels = input_channels
         self.is_deconv = is_deconv
         self.is_batchnorm = is_batchnorm
         self.input = input_channels
-        filters = [32, 64, 128, 256]
-        self.conv1 = UnetConv(self.in_channels, filters[0], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-        self.conv2 = UnetConv(filters[0], filters[1], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-        self.conv3 = UnetConv(filters[1], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-        self.center = UnetConv(filters[2], filters[3], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        filters = [kwargs["min_filter"], kwargs["min_filter"]*2, kwargs["min_filter"]*4, kwargs["min_filter"]*8]
+        self.conv1 = UnetConv(self.in_channels, filters[0], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv2 = UnetConv(filters[0], filters[1], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv3 = UnetConv(filters[1], filters[2], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.center = UnetConv(filters[2], filters[3], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
         # upsampling
         self.up_concat3 = UnetUp(filters[3], filters[2], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
         self.up_concat2 = UnetUp(filters[2], filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
@@ -63,9 +68,14 @@ class Unet(UnetSuper):
 
 #### ==== model with spatial transformer ==== ####
 class RTUnet(UnetSuper):
-        def __init__(self, len_test_set, hparams, input_channels, is_deconv=True,
+    """RTUnet
+
+    A Unet with a spatial transformer network at the beginning
+    Does not produce intended outcome
+    """
+        def __init__(self,  hparams, input_channels, is_deconv=True,
                      is_batchnorm=True, on_gpu=False, **kwargs):
-            super().__init__(len_test_set=len_test_set, hparams=hparams, **kwargs)
+            super().__init__( hparams=hparams, **kwargs)
             self.in_channels = input_channels
             self.is_deconv = is_deconv
             self.is_batchnorm = is_batchnorm
@@ -112,7 +122,6 @@ class RTUnet(UnetSuper):
 
                     center = self.center(maxpool2)
 
-                   # up3 = self.up_concat3(center, conv2)  # 64*16*16
                     up2 = self.up_concat2(center, conv2)  # 32*32*32
                     up1 = self.up_concat1(up2, conv1)  # 16*64*64
 
@@ -126,9 +135,14 @@ class RTUnet(UnetSuper):
 
 #### ==== Context Unet ==== ####
 class ContextUnet(UnetSuper):
-    def __init__(self, len_test_set, hparams, input_channels, is_deconv=True,
+    """Context Unet is a U-Net with added context modules and localization modules and a different way of generating
+    the higher dimension feature maps. Additionally deep_supervision elements are present, however not meaningfully
+    better
+
+    """
+    def __init__(self, hparams, input_channels, is_deconv=True,
                  is_batchnorm=True, on_gpu=False, deep_supervision=True, **kwargs):
-        super().__init__(len_test_set=len_test_set, hparams=hparams, **kwargs)
+        super().__init__(hparams=hparams, **kwargs)
         self.deep_supervision = deep_supervision
         self.in_channels = input_channels
         self.is_deconv = is_deconv
@@ -168,7 +182,6 @@ class ContextUnet(UnetSuper):
             self.final.cuda()
 
     def forward(self, x):
-        # x     3*256*256
         con1 = self.conv1(x) # 16*256*256
         son1 = self.context1(con1)
         plus1 = con1 + son1
