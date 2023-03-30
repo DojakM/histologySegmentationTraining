@@ -7,13 +7,14 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from rich import print
 import torch
-
 from data_loading.data_loader import ConicDataModule
-from models.unet_instance import Unet, RTUnet, ContextUnet
+import models.unet_instance
+from models.unet_super import UnetSuper
 from mlf_core.mlf_core import MLFCore
 
 if __name__ == "__main__":
-    torch.autograd.set_detect_anomaly(True)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     parser = ArgumentParser()
     parser.add_argument(
         '--general-seed',
@@ -43,7 +44,7 @@ if __name__ == "__main__":
         '--from-source',
         type=bool,
         default=False,
-        help='Downloads the underlying source data and applies necessary changes'
+        help='Downloads the Conic data and applies necessary changes'
     )
     parser.add_argument(
         '--model',
@@ -52,7 +53,7 @@ if __name__ == "__main__":
         help="Selects Model used for training. Currently available Unet and Unet + SPT"
     )
     parser = pl.Trainer.add_argparse_args(parent_parser=parser)
-    parser = Unet.add_model_specific_args(parent_parser=parser)
+    parser = UnetSuper.add_model_specific_args(parent_parser=parser)
     mlflow.autolog(True)
     # log conda env and system information
     try:
@@ -69,13 +70,14 @@ if __name__ == "__main__":
     dict_args["max_epochs"] = 250
     num_of_gpus = torch.cuda.device_count()
 
-    #MLFCore.set_general_random_seeds(general_seed)
-    #MLFCore.set_pytorch_random_seeds(pytorch_seed, num_of_gpus)
-
+    MLFCore.set_general_random_seeds(general_seed)
+    MLFCore.set_pytorch_random_seeds(pytorch_seed, num_of_gpus)
+    print(dict_args["accelerator"])
     if 'accelerator' in dict_args:
         if dict_args['accelerator'] == 'gpu':
             dict_args['accelerator'] = 'gpu'
-            dict_args['devices'] = 2
+        elif dict_args['accelerator'] == 'cpu':
+            dict_args['accelerator'] = "cpu"
         else:
             print(
                 f'[bold red]{dict_args["accelerator"]}[bold blue] currently not supported. Switching to [bold '
@@ -83,14 +85,14 @@ if __name__ == "__main__":
             dict_args['accelerator'] = 'cpu'
     dm = ConicDataModule(**dict_args)
     dict_args["num_classes"] = 7
-    #MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
+    MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
     dm.setup(stage='fit')
+    model = models.unet_instance.__getattr__(dict_args["model"])
     if torch.cuda.is_available():
-        model = ContextUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=True,
-                               **dict_args)
+        model = model(hparams=parser.parse_args(), input_channels=3, min_filter=32, on_gpu=True, **dict_args)
         model.cuda()
     else:
-        model = ContextUnet(7, hparams=parser.parse_args(), input_channels=3, min_filter=64, on_gpu=False, **dict_args)
+        model = model(hparams=parser.parse_args(), input_channels=3, min_filter=32, on_gpu=False, **dict_args)
     model.log_every_n_steps = dict_args['log_interval']
 
     # check, whether the run is inside a Docker container or not
