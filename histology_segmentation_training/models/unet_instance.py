@@ -73,63 +73,62 @@ class RTUnet(UnetSuper):
     A Unet with a spatial transformer network at the beginning
     Does not produce intended outcome
     """
-        def __init__(self,  hparams, input_channels, is_deconv=True,
-                     is_batchnorm=True, on_gpu=False, **kwargs):
-            super().__init__( hparams=hparams, **kwargs)
-            self.in_channels = input_channels
-            self.is_deconv = is_deconv
-            self.is_batchnorm = is_batchnorm
-            self.input = input_channels
-            filters = [8, 16, 32, 64]
+    def __init__(self, hparams, input_channels, is_deconv=True, is_batchnorm=True, on_gpu=False, **kwargs):
+        super().__init__(hparams=hparams, **kwargs)
+        self.in_channels = input_channels
+        self.is_deconv = is_deconv
+        self.is_batchnorm = is_batchnorm
+        self.input = input_channels
+        filters = [8, 16, 32, 64]
 
-            self.conv1 = SPTnet(self.in_channels, filters[0], 32,  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            self.conv2 = UnetConv(filters[0], filters[1], 16,  True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            self.center = UnetConv(filters[1], filters[2], 8, True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            # upsampling
-            self.up_concat3 = UnetUp(filters[3], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            self.up_concat2 = UnetUp(filters[2], filters[1], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-            self.up_concat1 = UnetUp(filters[1], filters[0], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv1 = SPTnet(self.in_channels, filters[0], 32,  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv2 = UnetConv(filters[0], filters[1], 16,  True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.center = UnetConv(filters[1], filters[2], 8, True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        # upsampling
+        self.up_concat3 = UnetUp(filters[3], filters[2], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.up_concat2 = UnetUp(filters[2], filters[1], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.up_concat1 = UnetUp(filters[1], filters[0], True, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
 
-            # final conv (without any concat)
-            self.final = nn.Conv2d(filters[0], 7, 1)
-            if on_gpu:
-                self.conv1.cuda()
-                self.conv2.cuda()
-                self.conv3.cuda()
-                self.center.cuda()
-                self.up_concat3.cuda()
-                self.up_concat2.cuda()
-                self.up_concat1.cuda()
-                self.final.cuda()
-            self.apply(weights_init)
+        # final conv (without any concat)
+        self.final = nn.Conv2d(filters[0], 7, 1)
+        if on_gpu:
+            self.conv1.cuda()
+            self.conv2.cuda()
+            self.conv3.cuda()
+            self.center.cuda()
+            self.up_concat3.cuda()
+            self.up_concat2.cuda()
+            self.up_concat1.cuda()
+            self.final.cuda()
+        self.apply(weights_init)
 
-        def forward(self, inputs: torch.Tensor):
-            maxpool = nn.MaxPool2d(kernel_size=2)
-            x_s = torch.chunk(inputs, 8, 2)
-            along_x = []
-            for i in x_s:
-                chunks = torch.chunk(i, 8, 3)
-                along_x.append(chunks)
-            merge_x = []
-            for chunks in along_x:
-                merge_y = []
-                for chunk in chunks:
-                    conv1 = self.conv1(chunk)  # 16*64*64
-                    maxpool1 = maxpool(conv1)  # 16*32*32
+    def forward(self, inputs: torch.Tensor):
+        maxpool = nn.MaxPool2d(kernel_size=2)
+        x_s = torch.chunk(inputs, 8, 2)
+        along_x = []
+        for i in x_s:
+            chunks = torch.chunk(i, 8, 3)
+            along_x.append(chunks)
+        merge_x = []
+        for chunks in along_x:
+            merge_y = []
+            for chunk in chunks:
+                conv1 = self.conv1(chunk)  # 16*64*64
+                maxpool1 = maxpool(conv1)  # 16*32*32
 
-                    conv2 = self.conv2(maxpool1)  # 32*32*32
-                    maxpool2 = maxpool(conv2)  # 32*16*16
+                conv2 = self.conv2(maxpool1)  # 32*32*32
+                maxpool2 = maxpool(conv2)  # 32*16*16
 
-                    center = self.center(maxpool2)
+                center = self.center(maxpool2)
 
-                    up2 = self.up_concat2(center, conv2)  # 32*32*32
-                    up1 = self.up_concat1(up2, conv1)  # 16*64*64
+                up2 = self.up_concat2(center, conv2)  # 32*32*32
+                up1 = self.up_concat1(up2, conv1)  # 16*64*64
 
-                    final = self.final(up1)
-                    finalize = nn.functional.softmax(final, dim=1)
-                    merge_y.append(finalize)
-                merge_x.append(torch.cat(merge_y, 3))
-            return torch.cat(merge_x, 2)
+                final = self.final(up1)
+                finalize = nn.functional.softmax(final, dim=1)
+                merge_y.append(finalize)
+            merge_x.append(torch.cat(merge_y, 3))
+        return torch.cat(merge_x, 2)
 
 
 
@@ -140,8 +139,8 @@ class ContextUnet(UnetSuper):
     better
 
     """
-    def __init__(self, hparams, input_channels, is_deconv=True,
-                 is_batchnorm=True, on_gpu=False, deep_supervision=True, **kwargs):
+    def __init__(self, hparams, input_channels, is_deconv=True, is_batchnorm=True, on_gpu=False,
+                 deep_supervision=True, **kwargs):
         super().__init__(hparams=hparams, **kwargs)
         self.deep_supervision = deep_supervision
         self.in_channels = input_channels
