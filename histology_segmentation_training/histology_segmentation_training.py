@@ -46,12 +46,6 @@ if __name__ == "__main__":
         default=False,
         help='Downloads the Conic data and applies necessary changes'
     )
-    parser.add_argument(
-        '--model',
-        type=str,
-        default="Unet",
-        help="Selects Model used for training. Currently available Unet and Unet + SPT"
-    )
     parser = pl.Trainer.add_argparse_args(parent_parser=parser)
     parser = UnetSuper.add_model_specific_args(parent_parser=parser)
     mlflow.autolog(True)
@@ -87,7 +81,7 @@ if __name__ == "__main__":
     dict_args["num_classes"] = 7
     MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
     dm.setup(stage='fit')
-    model = models.unet_instance.__getattr__(dict_args["model"])
+    model = models.unet_instance.__getattr__(dict_args["models"])
     if torch.cuda.is_available():
         model = model(hparams=parser.parse_args(), input_channels=3, min_filter=32, on_gpu=True, **dict_args)
         model.cuda()
