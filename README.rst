@@ -30,7 +30,10 @@ Features
 --------
 
 * Fully reproducible mlf-core Pytorch model
-* MLF-CORE TODO: Write features here
+* Allows training of pytorch models with the following structures:
+    * U-Net
+    * Context U-Net
+    * Spatial Transformer U-Net
 
 Credits
 -------
