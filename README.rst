@@ -25,10 +25,6 @@ stained histological images. Each image contains a segmentation mask with six nu
 epithelial, lymphocyte, plasma, eosinophil, connective tissue. The training can be done both deterministically and non
 deterministically on three different architectures: A basic U-Net, a context U-Net and a spatial transformer U-Net.
 
-.. image:: _images//basic_image.png
-
-.. image:: _images//cu_image.png
-
 
 * Free software: MIT
 * Documentation: https://seg-training.readthedocs.io.
