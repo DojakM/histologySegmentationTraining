@@ -30,6 +30,8 @@ class ConicData(Dataset):
     def __init__(self, ids: list, download: bool,
                  from_source: bool = False, from_ome_tiff: bool = True, apply_trans=False):
         super(ConicData, self).__init__()
+        if len(glob.glob(self.workdir + "/histology_segmentation_training/data/OME-TIFFs/")) < 2:
+            self.from_source()
         self.ids = ids
         self.imgs = []
         self.labels = []
