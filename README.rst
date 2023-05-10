@@ -28,6 +28,7 @@ deterministically on three different architectures: A basic U-Net, a context U-N
 .. image:: _images//basic_image.png
 
 .. image:: _images//cu_image.png
+    :scale: 70%
 
 
 * Free software: MIT
