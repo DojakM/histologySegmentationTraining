@@ -1,4 +1,4 @@
-name: seg_train_test
+name: histology-segmentation-training
 channels:
   - conda-forge
   - pytorch

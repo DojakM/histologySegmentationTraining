@@ -1,5 +1,3 @@
-import torch
-import torch.nn as nn
 from models.model_components import *
 from models.unet_super import UnetSuper
 from utils import weights_init

@@ -46,9 +46,15 @@ if __name__ == "__main__":
         default=False,
         help='Downloads the Conic data and applies necessary changes'
     )
+    parser.add_argument(
+        '--epochs',
+        type=int,
+        default=1,
+        help="Training duration"
+    )
     parser = pl.Trainer.add_argparse_args(parent_parser=parser)
     parser = UnetSuper.add_model_specific_args(parent_parser=parser)
-    #mlflow.autolog(True)
+    mlflow.autolog(True)
     # log conda env and system information
     try:
         MLFCore.log_sys_intel_conda_env()
@@ -61,11 +67,11 @@ if __name__ == "__main__":
     # number of gpus to make linter bit less restrict in terms of naming
     general_seed = dict_args['general_seed']
     pytorch_seed = dict_args['pytorch_seed']
-    dict_args["max_epochs"] = 1
+    dict_args["max_epochs"] = dict_args["epochs"]
     num_of_gpus = torch.cuda.device_count()
 
-    #MLFCore.set_general_random_seeds(general_seed)
-    #MLFCore.set_pytorch_random_seeds(pytorch_seed, num_of_gpus)
+    MLFCore.set_general_random_seeds(general_seed)
+    MLFCore.set_pytorch_random_seeds(pytorch_seed, num_of_gpus)
     print(dict_args["accelerator"])
     if 'accelerator' in dict_args:
         if dict_args['accelerator'] == 'gpu':
@@ -79,7 +85,7 @@ if __name__ == "__main__":
             dict_args['accelerator'] = 'cpu'
     dm = ConicDataModule(**dict_args)
     dict_args["num_classes"] = 7
-    #MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
+    MLFCore.log_input_data('histology_segmentation_training/data/OME-TIFFs/')
     dm.setup(stage='fit')
     model = models.unet_instance.__getattr__(dict_args["models"])
     if torch.cuda.is_available():

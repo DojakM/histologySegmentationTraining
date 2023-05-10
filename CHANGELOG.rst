@@ -2,7 +2,7 @@
 Changelog
 ==========
 
-This project adheres to `Semantic Versioning <https://semver.org/>`_.
+Basic Release of the histology segmentation training
 
 
 1.0.0
@@ -10,10 +10,29 @@ This project adheres to `Semantic Versioning <https://semver.org/>`_.
 
 **Added**
 
-* Allows training of a Unet on the Lizard Dataset
+* Allows training of a U-Net and a Context U-Net on the Lizard Dataset
+
+* Allows experimental training on multi-head spatial transformer U-Net
 
 **Fixed**
 
 **Dependencies**
+
+* matplotlib
+* mlflow
+* numpy
+* pandas
+* pytorch_lightning
+* Requests
+* rich
+* scikit_image
+* scikit_learn
+* scipy
+* system_intelligence
+* tifffile
+* torch
+* tqdm
+
+
 
 **Deprecated**
