@@ -1,5 +1,5 @@
 ============
-seg_training
+histologySegmentationTraining
 ============
 
 .. image:: https://github.com/asd/seg_training/workflows/Train%20seg_training%20using%20CPU/badge.svg
