@@ -1,0 +1,14 @@
+matplotlib==3.5.3
+mlflow==2.2.1
+numpy==1.23.5
+pandas==1.5.3
+pytorch_lightning==1.9.4
+Requests==2.29.0
+rich==13.3.2
+scikit_image==0.19.3
+scikit_learn==1.2.2
+scipy==1.10.1
+system_intelligence==2.0.2
+tifffile==2021.4.8
+torch==1.12.1
+tqdm==4.65.0
