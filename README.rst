@@ -19,6 +19,7 @@ histologySegmentationTraining
         :target: https://seg_training.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
+
 Deep Learning training module for semantic segmentation in histological images. The training dataset is the Lizard
 (https://zenodo.org/record/7508237) dataset. The dataset comprises 4981 patched images from multiple colon tissue H&E
 stained histological images. Each image contains a segmentation mask with six nuclei classes. The classes are neutrophil
