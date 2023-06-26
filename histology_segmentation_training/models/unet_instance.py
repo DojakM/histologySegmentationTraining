@@ -227,3 +227,67 @@ class ContextUnet(UnetSuper):
             final = self.seg(local1, local2, final)
 
         return nn.functional.softmax(final, dim=1) #1*256*256
+
+class ArchitectureOption3(UnetSuper):
+    """Unet
+
+    Basic Unet which is used for medical image segmentation and classification
+    original paper: https://arxiv.org/pdf/1505.04597
+    """
+    def __init__(self, hparams, input_channels, is_deconv=True, is_batchnorm=False, on_gpu=False, **kwargs):
+        super().__init__(hparams=hparams, **kwargs)
+        self.in_channels = input_channels
+        self.is_deconv = is_deconv
+        self.is_batchnorm = is_batchnorm
+        self.input = input_channels
+        filters = [16, 32, 64, 128]
+        self.conv1 = UnetConv(self.in_channels, filters[0], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.multiHead1 = multiHeadBlock2(2, filters[0], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.fwd1 = forwardProcessingBlock(filters[0],  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv2 = UnetConv(filters[0], filters[1], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.multiHead2 = multiHeadBlock2(2, filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.fwd2 = forwardProcessingBlock(filters[1],  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv3 = UnetConv(filters[1], filters[2], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        # upsampling
+        self.up_concat2 = UnetUp(filters[2], filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.up_concat1 = UnetUp(filters[1], filters[0], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        # final conv (without any concat)
+        self.final = nn.Conv2d(filters[0], kwargs["num_classes"], 1)
+        if on_gpu:
+            self.conv1.cuda()
+            self.multiHead1.cuda()
+            self.conv2.cuda()
+            self.multiHead2.cuda()
+            self.conv3.cuda()
+            self.fwd1.cuda()
+            self.fwd2.cuda()
+            self.up_concat2.cuda()
+            self.up_concat1.cuda()
+            self.final.cuda()
+        self.apply(weights_init)
+
+    def forward(self, inputs):
+        maxpool = nn.MaxPool2d(kernel_size=2)
+        conv1 = self.conv1(inputs)  # 16*256*256
+        maxpool1 = maxpool(conv1)  # 16*128*128
+        skip1 = self.multiHead1(conv1)
+        skip1 = self.fwd1(skip1)
+
+        conv2 = self.conv2(maxpool1)  # 32*128*128
+        maxpool2 = maxpool(conv2)  # 32*64*64
+        skip2 = self.multiHead1(conv2)
+        skip2 = self.fwd1(skip2)
+
+        conv3 = self.conv3(maxpool2)  # 64*64*64
+
+        up3 = self.up_concat3(conv2)  # 64*64*64
+        up2 = self.up_concat2(up3, conv2)  # 32*128*128
+        up1 = self.up_concat1(up2, conv1)  # 16*256*256
+
+        final = self.final(up1)
+        finalize = nn.functional.softmax(final, dim=1)
+        return finalize
+
+
+    def print(self, args: torch.Tensor) -> None:
+        print(args)

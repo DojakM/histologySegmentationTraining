@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 
 #### ===== basic Unet ===== ####
@@ -420,3 +421,125 @@ class forwardProcessingBlock(nn.Module):
         conved = self.conv(x)
         res = conved + x
         return self.norm(res)
+
+class SAHead2(nn.Module):
+    """SAHead2
+    Slight deviation in the architecture
+    """
+    def __init__(self, in_size, level, gpus, dropout_val, ks=3, stride=1):
+        super(SAHead2, self).__init__()
+        self.gpus = gpus
+        self.conv1 = nn.Sequential(
+            nn.Dropout(dropout_val),
+            nn.Conv2d(in_size, in_size, ks, padding=1, stride=stride),
+            nn.BatchNorm2d(in_size),
+            nn.ReLU(inplace=True),
+        )
+        self.convK = nn.Sequential(
+            nn.Dropout(dropout_val),
+            nn.Conv2d(in_size, in_size, ks, padding=1, stride=stride),
+            nn.ReLU(inplace=True)
+        )
+        self.convQ = nn.Sequential(
+            nn.Dropout(dropout_val),
+            nn.Conv2d(in_size, in_size, ks, padding=1, stride=stride),
+            nn.ReLU(inplace=True)
+        )
+        self.sigmoid = nn.Sigmoid()
+        self.localization = nn.Sequential(
+            nn.Conv2d(in_size, 8, kernel_size=7, padding=3),  # 64**2/level**2 *8
+            nn.MaxPool2d(2),  # 32*32*8
+            nn.ReLU(True),
+            nn.Conv2d(8, 16, kernel_size=5, padding=2),  # 32*32*16
+            nn.MaxPool2d(2),  # 16*16*16
+            nn.ReLU(True)
+        )
+        # W/4 H/4 16
+        # W/8 H/8 16
+        # tranformation regressor for theta
+        self.fc_loc = nn.Sequential(
+            nn.Linear(level * 16, 16),
+            nn.Linear(16, 3 * 2)
+        )
+        self.fc_loc[1].weight.data.zero_()
+        self.fc_loc[1].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
+        if self.gpus:
+            self.conv1.cuda()
+            self.fc_loc.cuda()
+            self.conv2.cuda()
+            self.localization.cuda()
+            self.sigmoid.cuda()
+            self.convQ.cuda()
+            self.convK.cuda()
+
+    def stn(self, x):
+        xs = self.localization(x)
+        xs = xs.view(-1, xs.size(1) * xs.size(2) * xs.size(3))
+        theta = self.fc_loc(xs)
+        theta = theta.view(-1, 2, 3)
+        grid = F.affine_grid(theta, x.size())
+        x = F.grid_sample(x, grid)
+        return x, theta
+
+    def rev_stn(self, x, theta: torch.tensor):
+        if self.gpus:
+            empty_tensor = torch.empty(theta.size()).cuda()
+        else:
+            empty_tensor = torch.empty(theta.size())
+        for val, batch in enumerate(theta):
+            if self.gpus:
+                new_theta = torch.cat((batch, torch.tensor([[0, 0, 1]]).cuda()), 0)
+                theta = new_theta.inverse().cuda()
+
+            else:
+                new_theta = torch.cat((batch, torch.tensor([[0, 0, 1]])), 0)
+                theta = new_theta.inverse()
+
+            theta = theta[:2, :]
+            empty_tensor[val, :, :] = theta
+        grid = F.affine_grid(empty_tensor, x.size())
+        x = F.grid_sample(x, grid)
+        return x
+    def forward(self, x):
+        upper = self.conv1(x)
+        up, theta = self.stn(upper)
+        middle = self.conv2(up)
+        q = self.convQ(middle)
+        k = self.convK(middle)
+        mult = q*k
+        sum = mult.sum(dim=1, keepdim=True)
+        sum = sum/np.sqrt(sum.size(0))
+        middle = self.sigmoid(sum.size(0))
+        lower = self.conv1(x)
+        t = self.rev_stn(middle, theta)
+        vals = nn.functional.softmax(t, dim=1)
+        return lower * vals
+
+class multiHeadBlock2(nn.Module):
+    def __init__(self, num_heads, in_size, level, gpus, dropout_val, ks=3, padding=1, stride=1):
+        super().__init__()
+        self.gpus = gpus
+        self.in_size = in_size
+        self.mlist = nn.ModuleList()
+        self.level = int(8/level)**2
+        for i in range(0, num_heads):
+            self.mlist.append(SAHead2(in_size, in_size, self.level, gpus, dropout_val, ks, padding, stride))
+        self.conv = SimpleUnetConv(in_size * num_heads, out_size=in_size, stride = 1, gpus=gpus,
+                                   dropout_val=dropout_val)
+        self.norm = nn.BatchNorm2d(in_size)
+        if self.gpus:
+            self.mlist.cuda()
+            self.conv.cuda()
+            self.norm.cuda()
+
+    def forward(self, x):
+        e_torch = self.mlist[0](x)
+        if self.gpus:
+            e_torch.cuda()
+        for i in self.mlist[1:]:
+            e_torch = torch.cat([e_torch, i(x)], dim=1)
+        res = self.conv(e_torch)
+        final = res + x
+        final = self.norm(final)
+        return final
+

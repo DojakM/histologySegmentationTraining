@@ -2,19 +2,19 @@
 Model
 ======
 
-TODO MLF-CORE: Write your model documentation here.
+* U-Net: basic three level U-Net
+* Context U-Net: three level U-Net with additional Context Modules
+* Multihead SPTU-Net: experimental Transformer U-Net
 
 Overview
 ~~~~~~~~~~
 
-The trained model classifies images of handwritten digits into the written number.
+The trained models perform a semantic segmentation of an histological image.
 
 Training and test data
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-The training data origins from the classical machine learning benchmark dataset `mnist <http://yann.lecun.com/exdb/mnist/>`_.
-60000 images are part of the training dataset and a further 10000 can be used for testing.
-For more details visit the `mnist website <http://yann.lecun.com/exdb/mnist/>`_.
+The training data is the Lizard Dataset which has been patched into 256*256 images according to CoNIC challenge
 
 Model architecture
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -37,13 +37,11 @@ On a high level the model can be summarized as follows:
 Evaluation
 ~~~~~~~~~~~~~
 
-The model was evaluated on 20% (10000 images) of unseen test data. The loss origins from the test data.
-The full training history is viewable by running the mlflow user interface inside the root directory of this project:
-``mlflow ui``.
+The evaluation was done on a test set from the Lizard DataSet
 
 Hyperparameter selection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Hyperparameters were chosen on widely known strong defaults.
+Hyperparameters were optimized according to https://arxiv.org/abs/1803.09820
 
-1. ``Adam optimizer`` was chosen for strong, general performance.
+1. ``AdamW optimizer`` was chosen for strong, general performance.
