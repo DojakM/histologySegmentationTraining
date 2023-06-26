@@ -281,8 +281,8 @@ class ArchitectureOption3(UnetSuper):
         conv3 = self.conv3(maxpool2)  # 64*64*64
 
         up3 = self.up_concat3(conv2)  # 64*64*64
-        up2 = self.up_concat2(up3, conv2)  # 32*128*128
-        up1 = self.up_concat1(up2, conv1)  # 16*256*256
+        up2 = self.up_concat2(up3, skip2)  # 32*128*128
+        up1 = self.up_concat1(up2, skip1)  # 16*256*256
 
         final = self.final(up1)
         finalize = nn.functional.softmax(final, dim=1)
