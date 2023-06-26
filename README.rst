@@ -19,15 +19,20 @@ histologySegmentationTraining
         :target: https://seg_training.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
+
 Deep Learning training module for semantic segmentation in histological images. The training dataset is the Lizard
 (https://zenodo.org/record/7508237) dataset. The dataset comprises 4981 patched images from multiple colon tissue H&E
 stained histological images. Each image contains a segmentation mask with six nuclei classes. The classes are neutrophil
 epithelial, lymphocyte, plasma, eosinophil, connective tissue. The training can be done both deterministically and non
 deterministically on three different architectures: A basic U-Net, a context U-Net and a spatial transformer U-Net.
 
+.. image:: _images/pred_comb.png
+
+
 
 * Free software: MIT
 * Documentation: https://seg-training.readthedocs.io.
+
 
 
 Features
@@ -44,5 +49,7 @@ Credits
 
 This package was created with `mlf-core`_ using Cookiecutter_.
 
+.. U-Net: https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28
+.. context U-Net: https://link.springer.com/chapter/10.1007/978-3-319-75238-9_25
 .. _mlf-core: https://mlf-core.readthedocs.io/en/latest/
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
