@@ -240,14 +240,14 @@ class ArchitectureOption3(UnetSuper):
         self.is_deconv = is_deconv
         self.is_batchnorm = is_batchnorm
         self.input = input_channels
-        filters = [16, 32, 64, 128]
+        filters = [8, 16, 32, 64]
         self.conv1 = UnetConv(self.in_channels, filters[0], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
         self.multiHead1 = multiHeadBlock2(2, filters[0], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
         self.fwd1 = forwardProcessingBlock(filters[0],  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
         self.conv2 = UnetConv(filters[0], filters[1], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
         self.multiHead2 = multiHeadBlock2(2, filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
         self.fwd2 = forwardProcessingBlock(filters[1],  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
-        self.conv3 = UnetConv(filters[1], filters[2], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+
         # upsampling
         self.up_concat2 = UnetUp(filters[2], filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
         self.up_concat1 = UnetUp(filters[1], filters[0], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
@@ -291,3 +291,129 @@ class ArchitectureOption3(UnetSuper):
 
     def print(self, args: torch.Tensor) -> None:
         print(args)
+
+class SkipNet(UnetSuper):
+    def __init__(self, hparams, input_channels, is_deconv=True, is_batchnorm=False, on_gpu=False, **kwargs):
+        super().__init__(hparams=hparams, **kwargs)
+        self.in_channels = input_channels
+        self.gpu = on_gpu
+        self.is_deconv = is_deconv
+        self.is_batchnorm = is_batchnorm
+        self.input = input_channels
+        filters = [16, 32, 64, 128]
+        self.placeholder = False
+        self.conv11 = UnetConv(self.in_channels, filters[0], is_batchnorm, gpus=on_gpu, dropout_val=kwargs[
+            "dropout_val"])
+        self.multiHead1 = multiHeadBlock2(2, filters[0], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.fwd1 = forwardProcessingBlock(filters[0],  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv12 = UnetConv(self.in_channels, filters[0], is_batchnorm, gpus=on_gpu, dropout_val=kwargs[
+            "dropout_val"])
+        self.conv21 = UnetConv(filters[0], filters[1], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.multiHead2 = multiHeadBlock2(2, filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.fwd2 = forwardProcessingBlock(filters[1],  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv22 = UnetConv(filters[0], filters[1], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv31 = UnetConv(filters[1], filters[2], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.multiHead3 = multiHeadBlock2(2, filters[2], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.fwd3 = forwardProcessingBlock(filters[2], gpu=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.conv32 = UnetConv(filters[1], filters[2], is_batchnorm, gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+
+        # upsampling
+        self.up_concat2 = SimpleUnetUp(filters[2], filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.up_mh2 = multiHeadBlock2(2, filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.up_fwd2 = forwardProcessingBlock(filters[1],  gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.up_conv2 = SimpleUnetConv(filters[1], filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"], stride=1)
+        self.up_concat1 = SimpleUnetUp(filters[1], filters[0], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.up_mh1 = multiHeadBlock2(2, filters[0], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.up_fwd1 = forwardProcessingBlock(filters[0], gpus=on_gpu, dropout_val=kwargs["dropout_val"])
+        self.up_conv1 = SimpleUnetConv(filters[1], filters[1], gpus=on_gpu, dropout_val=kwargs["dropout_val"], stride=1)
+
+        # final conv (without any concat)
+        self.final = nn.Conv2d(filters[0], kwargs["num_classes"], 1)
+        if on_gpu:
+            self.conv11.cuda()
+            self.conv12.cuda()
+            self.multiHead1.cuda()
+            self.conv21.cuda()
+            self.conv22.cuda()
+            self.multiHead2.cuda()
+            self.conv31.cuda()
+            self.conv32.cuda()
+            self.fwd1.cuda()
+            self.fwd2.cuda()
+            self.up_concat2.cuda()
+            self.up_concat1.cuda()
+            self.final.cuda()
+            self.multiHead3.cuda()
+            self.fwd3.cuda()
+            self.up_mh1.cuda()
+            self.up_mh2.cuda()
+            self.up_fwd1.cuda()
+            self.up_fwd2.cuda()
+        self.apply(weights_init)
+    def forward(self, inputs):
+        maxpool = nn.MaxPool2d(kernel_size=2)
+        ### Start Encoder
+        norm1 = nn.BatchNorm2D(self.filters[0])
+        norm2 = nn.BatchNorm2D(self.filters[1])
+        norm3 = nn.BatchNorm2D(self.filters[2])
+        if self.gpu:
+            norm1.cuda()
+            norm2.cuda()
+            norm3.cuda()
+        ### First Level
+        level1_step1 = self.conv11(inputs)
+        if not self.placeholder:
+            level1_step2 = self.multiHead1(level1_step1)
+            level1_step3 = self.fwd1(level1_step2)
+            level1_step4 = norm1(self.conv12(level1_step3) + level1_step1)
+        else:
+            level1_step4 = norm1(self.conv12(level1_step1) + level1_step1)
+
+        ### Second Level
+        level2_input = maxpool(level1_step4)
+        level2_step1 = self.conv21(level2_input)
+        if not self.placeholder:
+            level2_step2 = self.multiHead2(level2_step1)
+            level2_step3 = self.fwd2(level2_step2)
+            level2_step4 = norm2(self.conv22(level2_step3) + level2_step1)
+        else:
+            level2_step4 = norm2(self.conv22(level2_step1) + level2_step1)
+
+        ### Third level
+        level3_input = maxpool(level2_step4)
+        level3_step1 = self.conv31(level3_input)
+        if not self.placeholder:
+            level3_step2 = self.multiHead3(level3_step1)
+            level3_step3 = self.fwd3(level3_step2)
+            level3_step4 = norm3(self.conv32(level3_step3) + level3_step1)
+        else:
+            level3_step4 = norm3(self.conv32(level3_step1) + level3_step1)
+
+        ### End Encoder
+        downsampling_out = level3_step4
+        norm_up2 = nn.BatchNorm2D(self.filters[1])
+        norm_up1 = nn.BatchNorm2D(self.filters[0])
+
+        ###Start Decoder
+        ### Second Level
+        up2 = self.up_concat2(downsampling_out, level2_step4)
+        if not self.placeholder:
+            up2_step2 = self.up_mh2(up2)
+            up2_step3 = self.up_fwd2(up2_step2)
+            up2_step4 = self.up_conv2(up2_step3) + up2
+        else:
+            up2_step4 = self.up_conv2(up2) + up2
+        up2_out = norm_up2(up2_step4)
+
+        ### First Level
+        up1 = self.up_concat1(up2_out, level1_step4)
+        if not self.placeholder:
+            up1_step2 = self.up_mh1(up1)
+            up1_step3 = self.up_fwd1(up1_step2)
+            up1_step4 = self.up_conv1(up1_step3) + up1
+        else:
+            up1_step4 = self.up_conv1(up1) + up1
+        up1_out = norm_up1(up1_step4)
+
+        return nn.functional.softmax(self.final(up1_out), dim=1)
+

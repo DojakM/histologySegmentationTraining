@@ -142,7 +142,6 @@ class SimpleUnetUp(nn.Module):
     def forward(self, feature):
         return self.up(feature)
 
-
 class ContextModule(nn.Module):
     """ContextModule is a double convolution layer with a dropout layer of 0.3 inbetween
 
